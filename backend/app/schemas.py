@@ -24,6 +24,21 @@ class SaveState(BaseModel):
     discovered_locations: list[str]
 
 
+class RouteWaypointView(BaseModel):
+    offset: int
+    location_id: str | None
+    label: str
+    known: bool
+
+
+class RouteMapResponse(BaseModel):
+    route_id: str
+    display_name: str
+    length: int
+    current_offset: int
+    waypoints: list[RouteWaypointView]
+
+
 class ActionResponse(BaseModel):
     action_id: str
     state_version: int

@@ -63,6 +63,47 @@ def test_saves_are_owned_by_the_authenticated_actor() -> None:
         assert response.status_code == 404
 
 
+def test_map_hides_undiscovered_waypoint_identity() -> None:
+    with TestClient(app) as client:
+        headers = {"X-Dev-User-ID": "map-user"}
+        created = client.post("/api/v1/saves", headers=headers, json={}).json()
+
+        response = client.get(f"/api/v1/saves/{created['save_id']}/map", headers=headers)
+
+        assert response.status_code == 200
+        waypoints = response.json()["waypoints"]
+        assert waypoints[0] == {
+            "offset": 6,
+            "location_id": None,
+            "label": "Unexplored waypoint",
+            "known": False,
+        }
+
+        for turn in range(1, 7):
+            action = {
+                "action_id": f"map-travel-{turn}",
+                "action": "travel.advance",
+                "expected_state_version": turn,
+                "payload": {},
+            }
+            assert (
+                client.post(
+                    f"/api/v1/saves/{created['save_id']}/actions",
+                    headers=headers,
+                    json=action,
+                ).status_code
+                == 200
+            )
+
+        discovered = client.get(f"/api/v1/saves/{created['save_id']}/map", headers=headers).json()
+        assert discovered["waypoints"][0] == {
+            "offset": 6,
+            "location_id": "old_timberwood",
+            "label": "Old Timberwood",
+            "known": True,
+        }
+
+
 def test_stale_loaded_session_cannot_overwrite_a_newer_action() -> None:
     first_session = SessionLocal()
     second_session = SessionLocal()

@@ -4,13 +4,20 @@ from sqlalchemy.orm import Session
 
 from app.auth import actor_id
 from app.db import get_db
-from app.schemas import ActionRequest, ActionResponse, CreateSaveRequest, SaveState
+from app.schemas import (
+    ActionRequest,
+    ActionResponse,
+    CreateSaveRequest,
+    RouteMapResponse,
+    SaveState,
+)
 from app.services import (
     SaveNotFound,
     StateConflict,
     create_save,
     get_save,
     perform_action,
+    route_map,
     serialize_state,
 )
 
@@ -42,6 +49,16 @@ def save_state(
 ) -> SaveState:
     try:
         return serialize_state(get_save(db, owner_id, save_id))
+    except SaveNotFound:
+        raise HTTPException(status_code=404, detail="save not found") from None
+
+
+@app.get("/api/v1/saves/{save_id}/map", response_model=RouteMapResponse)
+def save_map(
+    save_id: str, db: Session = Depends(get_db), owner_id: str = Depends(actor_id)
+) -> RouteMapResponse:
+    try:
+        return route_map(db, owner_id, save_id)
     except SaveNotFound:
         raise HTTPException(status_code=404, detail="save not found") from None
 

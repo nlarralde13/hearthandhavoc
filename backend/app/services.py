@@ -4,9 +4,10 @@ import secrets
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.domain.travel import WESTERN_ROAD, TravelState, advance
+from app.content import load_route, load_route_record
+from app.domain.travel import TravelState, advance
 from app.models import ActionReceipt, Save
-from app.schemas import ActionResponse, SaveState
+from app.schemas import ActionResponse, RouteMapResponse, RouteWaypointView, SaveState
 
 
 class SaveNotFound(LookupError):
@@ -66,7 +67,7 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
     current = TravelState(
         save.route_id, save.route_offset, frozenset(json.loads(save.discovered_locations))
     )
-    result = advance(WESTERN_ROAD, current)
+    result = advance(load_route(save.route_id), current)
 
     next_discovered = json.dumps(sorted(result.state.discovered))
     next_version = save.state_version + 1
@@ -121,3 +122,29 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
     )
     db.commit()
     return response
+
+
+def route_map(db: Session, owner_id: str, save_id: str) -> RouteMapResponse:
+    save = get_save(db, owner_id, save_id)
+    record = load_route_record(save.route_id)
+    discovered = set(json.loads(save.discovered_locations))
+    waypoints = [
+        RouteWaypointView(
+            offset=waypoint["offset"],
+            location_id=waypoint["location_id"] if waypoint["location_id"] in discovered else None,
+            label=(
+                waypoint["display_name"]
+                if waypoint["location_id"] in discovered
+                else "Unexplored waypoint"
+            ),
+            known=waypoint["location_id"] in discovered,
+        )
+        for waypoint in record["waypoints"]
+    ]
+    return RouteMapResponse(
+        route_id=save.route_id,
+        display_name=record["display_name"],
+        length=record["length"],
+        current_offset=save.route_offset,
+        waypoints=waypoints,
+    )

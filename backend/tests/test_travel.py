@@ -1,5 +1,8 @@
 import pytest
-from app.domain.travel import WESTERN_ROAD, TravelError, TravelState, advance
+from app.content import load_route
+from app.domain.travel import TravelError, TravelState, advance
+
+WESTERN_ROAD = load_route("western_road")
 
 
 def test_old_timberwood_is_discovered_at_offset_six() -> None:

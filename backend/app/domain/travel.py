@@ -14,16 +14,6 @@ class Route:
     waypoints: tuple[Waypoint, ...]
 
 
-WESTERN_ROAD = Route(
-    route_id="western_road",
-    length=20,
-    waypoints=(
-        Waypoint("old_timberwood", 6),
-        Waypoint("briarbrook", 20),
-    ),
-)
-
-
 @dataclass(frozen=True)
 class TravelState:
     route_id: str

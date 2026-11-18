@@ -18,6 +18,19 @@ type ActionResponse = {
   state: SaveState;
 };
 
+type RouteMap = {
+  route_id: string;
+  display_name: string;
+  length: number;
+  current_offset: number;
+  waypoints: Array<{
+    offset: number;
+    location_id: string | null;
+    label: string;
+    known: boolean;
+  }>;
+};
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const USER_KEY = "hearth-and-havoc-dev-user";
 const SAVE_KEY = "hearth-and-havoc-save-id";
@@ -50,6 +63,7 @@ function actionId(): string {
 
 export default function App() {
   const [state, setState] = useState<SaveState | null>(null);
+  const [routeMap, setRouteMap] = useState<RouteMap | null>(null);
   const [events, setEvents] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,11 +80,13 @@ export default function App() {
         });
         localStorage.setItem(SAVE_KEY, created.save_id);
         setState(created);
+        setRouteMap(await request<RouteMap>(`/api/v1/saves/${created.save_id}/map`));
         setEvents(["You take stock of the damaged shack."]);
         return;
       }
       const loaded = await request<SaveState>(`/api/v1/saves/${saveId}/state`);
       setState(loaded);
+      setRouteMap(await request<RouteMap>(`/api/v1/saves/${loaded.save_id}/map`));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to load save.");
     } finally {
@@ -84,11 +100,11 @@ export default function App() {
 
   const routeProgress = useMemo(() => {
     if (!state) return 0;
-    return Math.round((state.route_offset / 20) * 100);
-  }, [state]);
+    return Math.round((state.route_offset / (routeMap?.length ?? 20)) * 100);
+  }, [routeMap, state]);
 
   async function advanceTravel() {
-    if (!state || busy || state.route_offset >= 20) return;
+    if (!state || busy || state.route_offset >= (routeMap?.length ?? 20)) return;
     setBusy(true);
     setError(null);
     try {
@@ -102,6 +118,7 @@ export default function App() {
         }),
       });
       setState(response.state);
+      setRouteMap(await request<RouteMap>(`/api/v1/saves/${response.state.save_id}/map`));
       setEvents((current) => [
         ...response.events.map((event) =>
           event.type === "location.discovered"
@@ -131,7 +148,7 @@ export default function App() {
 
       <section className="hero-panel">
         <div>
-          <p className="eyebrow">Homestead · Western Road</p>
+          <p className="eyebrow">Homestead · {routeMap?.display_name ?? "Western Road"}</p>
           <h2>The road west waits.</h2>
           <p className="muted">
             Your shack needs work. The forest has timber. Between the two lies a road,
@@ -140,7 +157,7 @@ export default function App() {
         </div>
         <div className="turn-card">
           <span>Adventure turn</span>
-          <strong>{state?.route_offset ?? "—"}<small> / 20</small></strong>
+          <strong>{state?.route_offset ?? "—"}<small> / {routeMap?.length ?? 20}</small></strong>
         </div>
       </section>
 
@@ -149,7 +166,7 @@ export default function App() {
           <div className="card-heading">
             <div>
               <p className="eyebrow">Known route</p>
-              <h3>Western Road</h3>
+              <h3>{routeMap?.display_name ?? "Western Road"}</h3>
             </div>
             <span className="route-percent">{routeProgress}%</span>
           </div>
@@ -159,15 +176,15 @@ export default function App() {
           <div className="route-map">
             <div className="route-line" />
             <div className="route-stop start"><span>⌂</span><small>Shack</small></div>
-            <div className={`route-stop timber ${state?.discovered_locations.includes("old_timberwood") ? "known" : ""}`}>
-              <span>♣</span><small>Timberwood</small>
-            </div>
-            <div className={`route-stop end ${state?.discovered_locations.includes("briarbrook") ? "known" : ""}`}>
-              <span>◆</span><small>Briarbrook</small>
-            </div>
+            {routeMap?.waypoints.map((waypoint, index) => (
+              <div className={`route-stop ${waypoint.known ? "known" : ""}`} key={waypoint.offset}>
+                <span>{index === routeMap.waypoints.length - 1 ? "◆" : "♣"}</span>
+                <small>{waypoint.label}</small>
+              </div>
+            ))}
           </div>
-          <button className="primary-button" onClick={() => void advanceTravel()} disabled={!state || busy || state.route_offset >= 20}>
-            {busy ? "Consulting the map…" : state?.route_offset === 20 ? "Road complete" : "Continue west"}
+          <button className="primary-button" onClick={() => void advanceTravel()} disabled={!state || busy || state.route_offset >= (routeMap?.length ?? 20)}>
+            {busy ? "Consulting the map…" : state?.route_offset === routeMap?.length ? "Road complete" : "Continue west"}
           </button>
         </article>
 

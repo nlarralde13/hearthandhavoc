@@ -1,0 +1,18 @@
+{
+  "content_version": "0.1.0",
+  "route_id": "western_road",
+  "display_name": "Western Road",
+  "length": 20,
+  "waypoints": [
+    {
+      "location_id": "old_timberwood",
+      "offset": 6,
+      "display_name": "Old Timberwood"
+    },
+    {
+      "location_id": "briarbrook",
+      "offset": 20,
+      "display_name": "Briarbrook"
+    }
+  ]
+}
