@@ -18,7 +18,8 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: ".venv/bin/uvicorn app.main:app --app-dir backend --port 8000",
+      command:
+        "if [ -x .venv/bin/python ]; then .venv/bin/python -m uvicorn app.main:app --app-dir backend --port 8000; else python -m uvicorn app.main:app --app-dir backend --port 8000; fi",
       cwd: "..",
       url: "http://127.0.0.1:8000/api/health",
       reuseExistingServer: !process.env.CI,
