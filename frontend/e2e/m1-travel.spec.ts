@@ -3,11 +3,12 @@ import { expect, test } from "@playwright/test";
 test("player can travel, discover Timberwood, and reload progress", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "The road west waits." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Connection established." })).toBeVisible();
   await expect(page.getByTestId("adventure-turn")).toHaveText("0 / 20");
+  await page.getByRole("button", { name: "Pause auto-travel" }).click();
+  await page.getByRole("button", { name: /Known route Western Road/ }).click();
   await expect(page.getByTestId("route-waypoint-6")).toHaveText("Unexplored waypoint");
   await expect(page.getByTestId("route-waypoint-20")).toHaveText("Unexplored waypoint");
-  await page.getByRole("button", { name: "Pause auto-travel" }).click();
 
   for (let turn = 1; turn <= 6; turn += 1) {
     await page.getByRole("button", { name: "Advance" }).click();

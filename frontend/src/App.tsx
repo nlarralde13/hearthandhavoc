@@ -103,7 +103,8 @@ export default function App() {
   const [countdown, setCountdown] = useState(AUTO_TRAVEL_DELAY_SECONDS);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("home");
-  const [expandedModule, setExpandedModule] = useState<ModuleId | null>("route");
+  const [journalOpen, setJournalOpen] = useState(false);
+  const [expandedModule, setExpandedModule] = useState<ModuleId | null>(null);
   const [command, setCommand] = useState("");
   const [commandNotice, setCommandNotice] = useState<string | null>(null);
 
@@ -120,12 +121,19 @@ export default function App() {
         localStorage.setItem(SAVE_KEY, created.save_id);
         setState(created);
         setRouteMap(await request<RouteMap>(`/api/v1/saves/${created.save_id}/map`));
-        setEvents(["You take stock of the damaged shack."]);
+        setEvents([
+          "SYSTEM // NEW ADVENTURE INITIALIZED · BLACKSMITH PROFILE LOADED",
+          "NARRATIVE // You take stock of the damaged shack.",
+        ]);
         return;
       }
       const loaded = await request<SaveState>(`/api/v1/saves/${saveId}/state`);
       setState(loaded);
       setRouteMap(await request<RouteMap>(`/api/v1/saves/${loaded.save_id}/map`));
+      setEvents([
+        `SYSTEM // LINK RESTORED · SAVE ${loaded.save_id.slice(0, 8).toUpperCase()} RESUMED`,
+        "NARRATIVE // The road west waits beyond the damaged shack.",
+      ]);
       try {
         setCombat(await request<CombatState>(`/api/v1/saves/${loaded.save_id}/combat`));
       } catch {
@@ -337,6 +345,15 @@ export default function App() {
     setExpandedModule((current) => current === module ? null : module);
   }
 
+  function navigateTo(tab: TabId) {
+    if (tab === "journal") {
+      setJournalOpen(true);
+      return;
+    }
+    setJournalOpen(false);
+    setActiveTab(tab);
+  }
+
   return (
     <main className="shell">
       <div className="game-console">
@@ -364,13 +381,13 @@ export default function App() {
       </section>
 
       <section className={`console-content ${activeTab === "home" ? "home-console-surface" : ""}`}>
-      {activeTab === "home" && <section className="hero-panel">
+      {activeTab === "home" && <section className="console-narrative">
         <div>
-          <p className="eyebrow">Homestead · {routeMap?.display_name ?? "Western Road"}</p>
-          <h2>The road west waits.</h2>
+          <p className="eyebrow">Home terminal · {routeMap?.display_name ?? "Western Road"}</p>
+          <h2>Connection established.</h2>
           <p className="muted">
-            Your shack needs work. The forest has timber. Between the two lies a road,
-            twenty turns, and almost certainly something with opinions about your equipment.
+            The damaged shack is behind you. The western road is open, the forest is quiet,
+            and the old world is waiting for input.
           </p>
         </div>
         <div className="turn-card">
@@ -466,7 +483,7 @@ export default function App() {
           </button>
           <ol className="journal-list">
             {events.length === 0 && <li className="muted">The page is quiet. Suspiciously quiet.</li>}
-            {events.slice(0, expandedModule === "journal" ? events.length : 2).map((event, index) => <li key={`${event}-${index}`}>{event}</li>)}
+            {events.slice(0, expandedModule === "journal" ? events.length : 2).map((event, index) => <li key={`${event}-${index}`} className={event.startsWith("SYSTEM") ? "console-system" : event.startsWith("NARRATIVE") ? "console-narrative-line" : ""}>{event}</li>)}
           </ol>
         </article>
       </section>}
@@ -496,11 +513,30 @@ export default function App() {
       </section>
 
       <nav className="bottom-navigation" aria-label="Game navigation">
-        {navigation.map((item) => <button key={item.id} className={`nav-button ${activeTab === item.id ? "active" : ""}`} onClick={() => setActiveTab(item.id)} aria-current={activeTab === item.id ? "page" : undefined}>
+        {navigation.map((item) => <button key={item.id} className={`nav-button ${(item.id === "journal" ? journalOpen : activeTab === item.id) ? "active" : ""}`} onClick={() => navigateTo(item.id)} aria-current={(item.id === "journal" ? journalOpen : activeTab === item.id) ? "page" : undefined}>
           <span className="nav-icon">{item.icon}</span><span>{item.label}</span>
         </button>)}
       </nav>
       </div>
+      {journalOpen && <div className="journal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setJournalOpen(false); }}>
+        <section className="journal-ledger" role="dialog" aria-modal="true" aria-labelledby="journal-title">
+          <div className="ledger-header">
+            <div><p className="eyebrow">Adventure ledger</p><h2 id="journal-title">Journal</h2></div>
+            <button className="ledger-close" onClick={() => setJournalOpen(false)} aria-label="Close journal">×</button>
+          </div>
+          <section className="ledger-section">
+            <div className="ledger-section-heading"><span>Open quests</span><small>0 active</small></div>
+            <p className="ledger-empty">No quests have been recorded yet. The road has not offered terms.</p>
+          </section>
+          <section className="ledger-section ledger-events">
+            <div className="ledger-section-heading"><span>Current adventure</span><small>{events.length} entries</small></div>
+            <ol className="ledger-list">
+              {events.length === 0 && <li className="ledger-empty">The ledger is blank.</li>}
+              {events.map((event, index) => <li key={`${event}-${index}`} className={event.startsWith("SYSTEM") ? "ledger-system" : event.startsWith("NARRATIVE") ? "ledger-narrative" : ""}>{event}</li>)}
+            </ol>
+          </section>
+        </section>
+      </div>}
     </main>
   );
 }
