@@ -1,0 +1,31 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    environment:
+      APP_ENV: development
+      DATABASE_URL: sqlite:////data/hearth_and_havoc.db
+      LOG_LEVEL: INFO
+    ports:
+      - "8100:8000"
+    volumes:
+      - hearth_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.frontend
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "5183:80"
+
+volumes:
+  hearth_data:

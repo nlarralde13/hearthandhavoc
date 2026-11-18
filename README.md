@@ -58,6 +58,19 @@ Validate canonical game content before starting work:
 .venv/bin/python -m app.validate_content
 ```
 
+## Webdev deployment
+
+The isolated development deployment uses ports `5183` (frontend) and `8100`
+(API), leaving the reusable template on `5173` and `8000` untouched:
+
+```bash
+docker compose -f infra/dev-compose.yaml up -d --build
+```
+
+The browser talks to the frontend container, which proxies `/api` to the API
+container. The SQLite database lives in the Compose-managed `hearth_data`
+volume for this development deployment.
+
 The development frontend uses the temporary `X-Dev-User-ID` header in local
 development. Shared and production environments require a validated OIDC
 bearer token. Secrets belong in an untracked `.env` file or an approved runtime
