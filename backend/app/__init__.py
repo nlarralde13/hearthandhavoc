@@ -1,0 +1,1 @@
+"""Hearth & Havoc backend."""
