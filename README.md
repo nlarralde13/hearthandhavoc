@@ -46,9 +46,16 @@ Start the API and frontend in separate terminals:
 cd frontend && npm install && npm run dev
 ```
 
-The development frontend uses the temporary `X-Dev-User-ID` header until the
-OIDC boundary is implemented. Secrets belong in an untracked `.env` file or an
-approved runtime secret store; never commit them.
+Run database migrations before starting the API:
+
+```bash
+.venv/bin/alembic upgrade head
+```
+
+The development frontend uses the temporary `X-Dev-User-ID` header in local
+development. Shared and production environments require a validated OIDC
+bearer token. Secrets belong in an untracked `.env` file or an approved runtime
+secret store; never commit them.
 
 ## Working rules
 

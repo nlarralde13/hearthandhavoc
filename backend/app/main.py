@@ -1,10 +1,9 @@
-from contextlib import asynccontextmanager
-
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from app.db import create_schema, get_db
+from app.auth import actor_id
+from app.db import get_db
 from app.schemas import ActionRequest, ActionResponse, CreateSaveRequest, SaveState
 from app.services import (
     SaveNotFound,
@@ -14,35 +13,15 @@ from app.services import (
     perform_action,
     serialize_state,
 )
-from app.settings import get_settings
 
-settings = get_settings()
-
-
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    create_schema()
-    yield
-
-
-app = FastAPI(title="Hearth & Havoc API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Hearth & Havoc API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
     allow_credentials=False,
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "X-Dev-User-ID"],
+    allow_headers=["Authorization", "Content-Type", "X-Dev-User-ID"],
 )
-
-
-def actor_id(x_dev_user_id: str | None = Header(default=None)) -> str:
-    if settings.app_env != "development":
-        raise HTTPException(status_code=501, detail="OIDC authentication is not configured yet")
-    if not x_dev_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="X-Dev-User-ID is required locally"
-        )
-    return x_dev_user_id
 
 
 @app.get("/api/health")
