@@ -7,9 +7,10 @@ test("player can travel, discover Timberwood, and reload progress", async ({ pag
   await expect(page.getByTestId("adventure-turn")).toHaveText("0 / 20");
   await expect(page.getByTestId("route-waypoint-6")).toHaveText("Unexplored waypoint");
   await expect(page.getByTestId("route-waypoint-20")).toHaveText("Unexplored waypoint");
+  await page.getByRole("button", { name: "Pause auto-travel" }).click();
 
   for (let turn = 1; turn <= 6; turn += 1) {
-    await page.getByRole("button", { name: "Continue west" }).click();
+    await page.getByRole("button", { name: "Advance one turn" }).click();
     await expect(page.getByTestId("adventure-turn")).toHaveText(`${turn} / 20`);
   }
 

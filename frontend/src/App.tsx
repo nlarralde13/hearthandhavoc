@@ -52,6 +52,7 @@ type CombatActionResponse = {
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const USER_KEY = "hearth-and-havoc-dev-user";
 const SAVE_KEY = "hearth-and-havoc-save-id";
+const AUTO_TRAVEL_DELAY_SECONDS = 3;
 
 function devUserId(): string {
   return localStorage.getItem(USER_KEY) ?? "local-player";
@@ -85,6 +86,8 @@ export default function App() {
   const [combat, setCombat] = useState<CombatState | null>(null);
   const [events, setEvents] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [autoTravel, setAutoTravel] = useState(true);
+  const [countdown, setCountdown] = useState(AUTO_TRAVEL_DELAY_SECONDS);
   const [error, setError] = useState<string | null>(null);
 
   const loadSave = useCallback(async () => {
@@ -127,7 +130,7 @@ export default function App() {
     return Math.round((state.route_offset / (routeMap?.length ?? 20)) * 100);
   }, [routeMap, state]);
 
-  async function advanceTravel() {
+  const advanceTravel = useCallback(async () => {
     if (!state || busy || state.route_offset >= (routeMap?.length ?? 20)) return;
     setBusy(true);
     setError(null);
@@ -143,11 +146,15 @@ export default function App() {
       });
       setState(response.state);
       setRouteMap(await request<RouteMap>(`/api/v1/saves/${response.state.save_id}/map`));
+      const foundSomething = response.events.some((event) => event.type !== "travel.advanced");
+      if (foundSomething || response.state.route_offset >= (routeMap?.length ?? 20)) {
+        setAutoTravel(false);
+      }
       setEvents((current) => [
         ...response.events.map((event) =>
           event.type === "location.discovered"
             ? `Discovered: ${event.location_id}`
-            : `Travel advanced to turn ${event.offset}`,
+            : `The road is quiet. Turn ${event.offset} passes.`,
         ),
         ...current,
       ]);
@@ -156,7 +163,25 @@ export default function App() {
     } finally {
       setBusy(false);
     }
-  }
+  }, [busy, routeMap?.length, state]);
+
+  useEffect(() => {
+    if (!autoTravel || busy || !state || state.route_offset >= (routeMap?.length ?? 20)) return;
+
+    setCountdown(AUTO_TRAVEL_DELAY_SECONDS);
+    let remaining = AUTO_TRAVEL_DELAY_SECONDS;
+    const timer = window.setInterval(() => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        window.clearInterval(timer);
+        void advanceTravel();
+        return;
+      }
+      setCountdown(remaining);
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [advanceTravel, autoTravel, busy, routeMap?.length, state]);
 
   async function beginCombat() {
     if (!state || busy) return;
@@ -260,9 +285,23 @@ export default function App() {
               </div>
             ))}
           </div>
-          <button className="primary-button" onClick={() => void advanceTravel()} disabled={!state || busy || state.route_offset >= (routeMap?.length ?? 20)}>
-            {busy ? "Consulting the map…" : state?.route_offset === routeMap?.length ? "Road complete" : "Continue west"}
-          </button>
+          <div className="travel-controls">
+            <div className="travel-status" aria-live="polite">
+              {state?.route_offset === routeMap?.length
+                ? "The road is complete."
+                : autoTravel
+                  ? `Auto-travel resumes in ${countdown}s`
+                  : "Auto-travel paused"}
+            </div>
+            <button className="primary-button" onClick={() => void advanceTravel()} disabled={!state || busy || state.route_offset >= (routeMap?.length ?? 20)}>
+              {busy ? "Consulting the map…" : state?.route_offset === routeMap?.length ? "Road complete" : "Advance one turn"}
+            </button>
+            {state && state.route_offset < (routeMap?.length ?? 20) && (
+              <button className="secondary-button travel-toggle" onClick={() => setAutoTravel((current) => !current)} disabled={busy}>
+                {autoTravel ? "Pause auto-travel" : "Resume auto-travel"}
+              </button>
+            )}
+          </div>
         </article>
 
         {state?.discovered_locations.includes("old_timberwood") && (
