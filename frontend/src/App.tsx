@@ -201,6 +201,18 @@ export default function App() {
     }
   }
 
+  async function resetProgress() {
+    if (!window.confirm("Start a new adventure? Your current browser progress will be replaced.")) return;
+    setAutoTravel(false);
+    setState(null);
+    setRouteMap(null);
+    setCombat(null);
+    setEvents([]);
+    localStorage.removeItem(SAVE_KEY);
+    await loadSave();
+    setAutoTravel(true);
+  }
+
   async function combatAction(action: "attack" | "defend") {
     if (!state || !combat || busy || combat.status !== "active") return;
     setBusy(true);
@@ -243,7 +255,12 @@ export default function App() {
           <p className="eyebrow">A small world, stubbornly alive</p>
           <h1>Hearth <span>&amp;</span> Havoc</h1>
         </div>
-        <div className="version">content {state?.content_version ?? "—"}</div>
+        <div className="masthead-actions">
+          <div className="version">content {state?.content_version ?? "—"}</div>
+          <button className="reset-button" onClick={() => void resetProgress()} disabled={busy}>
+            Reset progress
+          </button>
+        </div>
       </header>
 
       {error && <div className="notice error">{error}</div>}
