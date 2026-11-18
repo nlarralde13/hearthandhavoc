@@ -15,8 +15,12 @@ test("player can travel, discover Timberwood, and reload progress", async ({ pag
 
   await expect(page.getByTestId("route-waypoint-6")).toHaveText("Old Timberwood");
   await expect(page.getByTestId("route-waypoint-20")).toHaveText("Unexplored waypoint");
+  await page.getByRole("button", { name: "Face the goblin" }).click();
+  await expect(page.getByRole("heading", { name: "Goblin in the timber" })).toBeVisible();
+  await page.getByRole("button", { name: "Attack" }).click();
   await page.reload();
 
   await expect(page.getByTestId("adventure-turn")).toHaveText("6 / 20");
   await expect(page.getByTestId("route-waypoint-6")).toHaveText("Old Timberwood");
+  await expect(page.getByRole("heading", { name: "Goblin in the timber" })).toBeVisible();
 });

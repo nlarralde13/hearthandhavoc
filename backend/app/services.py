@@ -211,6 +211,14 @@ def start_combat(db: Session, owner_id: str, save_id: str, enemy_id: str) -> Com
     return _combat_response(encounter, state)
 
 
+def get_combat(db: Session, owner_id: str, save_id: str) -> CombatStateResponse:
+    save = get_save(db, owner_id, save_id)
+    encounter = db.scalar(select(CombatEncounter).where(CombatEncounter.save_id == save.id))
+    if encounter is None:
+        raise CombatNotFound(save_id)
+    return _combat_response(encounter, _combat_state(encounter))
+
+
 def combat_action(db: Session, owner_id: str, save_id: str, request) -> CombatActionResponse:
     save = get_save(db, owner_id, save_id)
     encounter = db.scalar(select(CombatEncounter).where(CombatEncounter.save_id == save.id))

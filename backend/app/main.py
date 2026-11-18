@@ -25,6 +25,7 @@ from app.services import (
     StateConflict,
     combat_action,
     create_save,
+    get_combat,
     get_save,
     perform_action,
     route_map,
@@ -94,6 +95,20 @@ def begin_combat(
         raise HTTPException(status_code=404, detail="save not found") from None
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+@app.get("/api/v1/saves/{save_id}/combat", response_model=CombatStateResponse)
+def current_combat(
+    save_id: str,
+    db: Session = Depends(get_db),
+    owner_id: str = Depends(actor_id),
+) -> CombatStateResponse:
+    try:
+        return get_combat(db, owner_id, save_id)
+    except SaveNotFound:
+        raise HTTPException(status_code=404, detail="save not found") from None
+    except CombatNotFound:
+        raise HTTPException(status_code=404, detail="combat encounter not found") from None
 
 
 @app.post("/api/v1/saves/{save_id}/combat/actions", response_model=CombatActionResponse)

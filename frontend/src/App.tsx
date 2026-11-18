@@ -31,6 +31,24 @@ type RouteMap = {
   }>;
 };
 
+type CombatState = {
+  encounter_id: string;
+  enemy_id: string;
+  turn: "player" | "enemy";
+  status: "active" | "victory" | "defeat";
+  round: number;
+  action_index: number;
+  player_hp: number;
+  player_max_hp: number;
+  enemy_hp: number;
+  enemy_max_hp: number;
+};
+
+type CombatActionResponse = {
+  events: Array<{ type: string; target?: string; amount?: number }>;
+  state: CombatState;
+};
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const USER_KEY = "hearth-and-havoc-dev-user";
 const SAVE_KEY = "hearth-and-havoc-save-id";
@@ -64,6 +82,7 @@ function actionId(): string {
 export default function App() {
   const [state, setState] = useState<SaveState | null>(null);
   const [routeMap, setRouteMap] = useState<RouteMap | null>(null);
+  const [combat, setCombat] = useState<CombatState | null>(null);
   const [events, setEvents] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +106,11 @@ export default function App() {
       const loaded = await request<SaveState>(`/api/v1/saves/${saveId}/state`);
       setState(loaded);
       setRouteMap(await request<RouteMap>(`/api/v1/saves/${loaded.save_id}/map`));
+      try {
+        setCombat(await request<CombatState>(`/api/v1/saves/${loaded.save_id}/combat`));
+      } catch {
+        setCombat(null);
+      }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to load save.");
     } finally {
@@ -129,6 +153,59 @@ export default function App() {
       ]);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to advance travel.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function beginCombat() {
+    if (!state || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const started = await request<CombatState>(`/api/v1/saves/${state.save_id}/combat`, {
+        method: "POST",
+        body: JSON.stringify({ enemy_id: "goblin" }),
+      });
+      setCombat(started);
+      setEvents((current) => ["A goblin steps from the trees. It looks confident.", ...current]);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to start combat.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function combatAction(action: "attack" | "defend") {
+    if (!state || !combat || busy || combat.status !== "active") return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await request<CombatActionResponse>(
+        `/api/v1/saves/${state.save_id}/combat/actions`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            action_id: actionId(),
+            action,
+            expected_action_index: combat.action_index,
+          }),
+        },
+      );
+      setCombat(response.state);
+      const messages = response.events.map((event) => {
+        if (event.type === "combat.victory") return "The goblin is defeated.";
+        if (event.type === "combat.defeat") return "You are defeated and wake at home.";
+        if (event.type === "combat.critical") return "A critical strike. The goblin objects, briefly.";
+        if (event.type === "combat.damage") return `${event.target === "player" ? "You take" : "The goblin takes"} ${event.amount} damage.`;
+        if (event.type === "combat.player.defend") return "You brace behind your battered shield.";
+        if (event.type === "combat.defend.reduced_damage") return "Your guard absorbs part of the blow.";
+        if (event.type === "combat.enemy.attack") return "The goblin attacks.";
+        return action === "attack" ? "You swing at the goblin." : "You steady yourself.";
+      });
+      setEvents((current) => [...messages, ...current]);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to resolve combat action.");
     } finally {
       setBusy(false);
     }
@@ -187,6 +264,40 @@ export default function App() {
             {busy ? "Consulting the map…" : state?.route_offset === routeMap?.length ? "Road complete" : "Continue west"}
           </button>
         </article>
+
+        {state?.discovered_locations.includes("old_timberwood") && (
+          <article className="card combat-card">
+            <div className="card-heading">
+              <div>
+                <p className="eyebrow">Encounter</p>
+                <h3>Goblin in the timber</h3>
+              </div>
+              {combat && <span className={`combat-status ${combat.status}`}>{combat.status}</span>}
+            </div>
+            {!combat && (
+              <>
+                <p className="muted">Something small, green, and poorly mannered has noticed you.</p>
+                <button className="primary-button" onClick={() => void beginCombat()} disabled={busy}>
+                  Face the goblin
+                </button>
+              </>
+            )}
+            {combat && (
+              <>
+                <div className="combat-bars">
+                  <div><span>You</span><strong>{combat.player_hp} / {combat.player_max_hp}</strong><div className="health-track"><i style={{ width: `${(combat.player_hp / combat.player_max_hp) * 100}%` }} /></div></div>
+                  <div><span>Goblin</span><strong>{combat.enemy_hp} / {combat.enemy_max_hp}</strong><div className="health-track enemy"><i style={{ width: `${(combat.enemy_hp / combat.enemy_max_hp) * 100}%` }} /></div></div>
+                </div>
+                {combat.status === "active" ? (
+                  <div className="combat-actions">
+                    <button className="primary-button" onClick={() => void combatAction("attack")} disabled={busy || combat.turn !== "player"}>Attack</button>
+                    <button className="secondary-button" onClick={() => void combatAction("defend")} disabled={busy || combat.turn !== "player"}>Defend</button>
+                  </div>
+                ) : <p className="muted">The encounter is resolved. The forest resumes pretending it saw nothing.</p>}
+              </>
+            )}
+          </article>
+        )}
 
         <article className="card journal-card">
           <div className="card-heading">
