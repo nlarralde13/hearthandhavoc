@@ -157,7 +157,7 @@ export default function App() {
         </div>
         <div className="turn-card">
           <span>Adventure turn</span>
-          <strong>{state?.route_offset ?? "—"}<small> / {routeMap?.length ?? 20}</small></strong>
+          <strong data-testid="adventure-turn">{state?.route_offset ?? "—"}<small> / {routeMap?.length ?? 20}</small></strong>
         </div>
       </section>
 
@@ -179,7 +179,7 @@ export default function App() {
             {routeMap?.waypoints.map((waypoint, index) => (
               <div className={`route-stop ${waypoint.known ? "known" : ""}`} key={waypoint.offset}>
                 <span>{index === routeMap.waypoints.length - 1 ? "◆" : "♣"}</span>
-                <small>{waypoint.label}</small>
+                <small data-testid={`route-waypoint-${waypoint.offset}`}>{waypoint.label}</small>
               </div>
             ))}
           </div>
