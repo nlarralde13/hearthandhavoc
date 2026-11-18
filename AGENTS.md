@@ -11,13 +11,16 @@ credential, and destructive operations remain Cogsworth-controlled actions.
 
 1. Read the relevant design and architecture documents and inspect the actual
    repository state before changing files.
-2. Work on a feature branch named like
-   `feature/HAH-M1-01-save-model`.
-3. Keep commits focused and do not force-push, reset, or overwrite unrelated
+2. During the current development phase, direct commits to `main` are allowed
+   after validation. Feature branches remain useful for risky or parallel work,
+   but ordinary dev changes do not require a pull request.
+3. Pull requests become required for production promotion, production/shared
+   infrastructure changes, and any future release branch.
+4. Keep commits focused and do not force-push, reset, or overwrite unrelated
    work.
-4. Add deterministic tests for every domain rule and edge case.
-5. Run focused tests, lint/type checks, and a build before reporting completion.
-6. Report changed paths, commit, validation, risks, and remaining questions.
+5. Add deterministic tests for every domain rule and edge case.
+6. Run focused tests, lint/type checks, and a build before reporting completion.
+7. Report changed paths, commit, validation, risks, and remaining questions.
 
 ## Game rules
 

@@ -65,5 +65,8 @@ secret store; never commit them.
 
 ## Working rules
 
-Use feature branches and pull requests. Every gameplay mutation must be
-validated by the backend, run atomically, and accept an idempotency key.
+During development, validated changes may be committed directly to `main` to
+keep iteration fast. Pull requests are required when promoting to production,
+changing shared/production infrastructure, or preparing a release. Every
+gameplay mutation must be validated by the backend, run atomically, and accept
+an idempotency key.
