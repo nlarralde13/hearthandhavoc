@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from app.db import create_schema, get_db
@@ -25,6 +26,13 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Hearth & Havoc API", version="0.1.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-Dev-User-ID"],
+)
 
 
 def actor_id(x_dev_user_id: str | None = Header(default=None)) -> str:

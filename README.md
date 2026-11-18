@@ -32,8 +32,22 @@ infra/         Deployment configuration after environment validation
 
 ## Local development
 
-The local development command and dependency setup will be added with the
-first implementation slice. Secrets belong in an untracked `.env` file or an
+Create the Python environment and install development dependencies:
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e '.[dev]'
+```
+
+Start the API and frontend in separate terminals:
+
+```bash
+.venv/bin/uvicorn app.main:app --app-dir backend --reload --port 8000
+cd frontend && npm install && npm run dev
+```
+
+The development frontend uses the temporary `X-Dev-User-ID` header until the
+OIDC boundary is implemented. Secrets belong in an untracked `.env` file or an
 approved runtime secret store; never commit them.
 
 ## Working rules
