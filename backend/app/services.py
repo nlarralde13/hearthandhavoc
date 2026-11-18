@@ -1,13 +1,28 @@
 import json
 import secrets
+from dataclasses import asdict
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.content import load_route, load_route_record
+from app.domain.combat import (
+    CombatError,
+    CombatState,
+    resolve_enemy_turn,
+    resolve_player_action,
+    start_encounter,
+)
 from app.domain.travel import TravelState, advance
-from app.models import ActionReceipt, Save
-from app.schemas import ActionResponse, RouteMapResponse, RouteWaypointView, SaveState
+from app.models import ActionReceipt, CombatEncounter, Save
+from app.schemas import (
+    ActionResponse,
+    CombatActionResponse,
+    CombatStateResponse,
+    RouteMapResponse,
+    RouteWaypointView,
+    SaveState,
+)
 
 
 class SaveNotFound(LookupError):
@@ -15,6 +30,10 @@ class SaveNotFound(LookupError):
 
 
 class StateConflict(ValueError):
+    pass
+
+
+class CombatNotFound(LookupError):
     pass
 
 
@@ -148,3 +167,88 @@ def route_map(db: Session, owner_id: str, save_id: str) -> RouteMapResponse:
         current_offset=save.route_offset,
         waypoints=waypoints,
     )
+
+
+def _combat_response(encounter: CombatEncounter, state: CombatState) -> CombatStateResponse:
+    return CombatStateResponse(
+        encounter_id=encounter.id,
+        enemy_id=state.enemy_id,
+        turn=state.turn,
+        status=state.status,
+        round=state.round,
+        action_index=state.action_index,
+        player_hp=state.player_hp,
+        player_max_hp=state.player_max_hp,
+        enemy_hp=state.enemy_hp,
+        enemy_max_hp=state.enemy_max_hp,
+    )
+
+
+def _combat_state(encounter: CombatEncounter) -> CombatState:
+    return CombatState(**json.loads(encounter.state_json))
+
+
+def start_combat(db: Session, owner_id: str, save_id: str, enemy_id: str) -> CombatStateResponse:
+    save = get_save(db, owner_id, save_id)
+    existing = db.scalar(select(CombatEncounter).where(CombatEncounter.save_id == save.id))
+    if existing is not None:
+        return _combat_response(existing, _combat_state(existing))
+    if enemy_id != "goblin":
+        raise CombatError(f"unsupported enemy: {enemy_id}")
+
+    state = start_encounter(f"{save.root_seed}:goblin:{save.state_version}")
+    if state.turn == "enemy":
+        state = resolve_enemy_turn(state).state
+    encounter = CombatEncounter(
+        save_id=save.id,
+        enemy_id=enemy_id,
+        status=state.status,
+        state_json=json.dumps(asdict(state)),
+    )
+    db.add(encounter)
+    db.commit()
+    db.refresh(encounter)
+    return _combat_response(encounter, state)
+
+
+def combat_action(db: Session, owner_id: str, save_id: str, request) -> CombatActionResponse:
+    save = get_save(db, owner_id, save_id)
+    encounter = db.scalar(select(CombatEncounter).where(CombatEncounter.save_id == save.id))
+    if encounter is None:
+        raise CombatNotFound(save_id)
+    receipt = db.scalar(
+        select(ActionReceipt).where(
+            ActionReceipt.save_id == save.id,
+            ActionReceipt.action_id == request.action_id,
+        )
+    )
+    if receipt is not None:
+        result = json.loads(receipt.result_json)
+        result["replayed"] = True
+        return CombatActionResponse(**result)
+
+    state = _combat_state(encounter)
+    if state.action_index != request.expected_action_index:
+        raise StateConflict(
+            "expected combat action index "
+            f"{request.expected_action_index}, current is {state.action_index}"
+        )
+    result = resolve_player_action(state, request.action)
+    encounter.status = result.state.status
+    encounter.state_json = json.dumps(asdict(result.state))
+    response = CombatActionResponse(
+        action_id=request.action_id,
+        events=list(result.events),
+        state=_combat_response(encounter, result.state),
+    )
+    db.add(
+        ActionReceipt(
+            save_id=save.id,
+            action_id=request.action_id,
+            action_type=f"combat.{request.action}",
+            state_version=save.state_version,
+            result_json=response.model_dump_json(),
+        )
+    )
+    db.commit()
+    return response

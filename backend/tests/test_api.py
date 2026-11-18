@@ -136,3 +136,37 @@ def test_stale_loaded_session_cannot_overwrite_a_newer_action() -> None:
     finally:
         first_session.close()
         second_session.close()
+
+
+def test_start_and_replay_goblin_combat() -> None:
+    with TestClient(app) as client:
+        headers = {"X-Dev-User-ID": "combat-user"}
+        created = client.post("/api/v1/saves", headers=headers, json={}).json()
+        combat_url = f"/api/v1/saves/{created['save_id']}/combat"
+
+        started = client.post(combat_url, headers=headers, json={})
+        assert started.status_code == 200
+        combat = started.json()
+        assert combat["enemy_id"] == "goblin"
+        assert "seed" not in combat
+        assert combat["turn"] == "player"
+
+        action = {
+            "action_id": "goblin-attack-1",
+            "action": "attack",
+            "expected_action_index": combat["action_index"],
+        }
+        first = client.post(f"{combat_url}/actions", headers=headers, json=action)
+        assert first.status_code == 200
+        assert first.json()["state"]["action_index"] == combat["action_index"] + 1
+
+        replay = client.post(f"{combat_url}/actions", headers=headers, json=action)
+        assert replay.status_code == 200
+        assert replay.json()["replayed"] is True
+
+        stale = client.post(
+            f"{combat_url}/actions",
+            headers=headers,
+            json={**action, "action_id": "goblin-attack-2"},
+        )
+        assert stale.status_code == 409

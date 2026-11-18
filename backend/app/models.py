@@ -40,3 +40,18 @@ class ActionReceipt(Base):
     state_version: Mapped[int] = mapped_column(Integer)
     result_json: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class CombatEncounter(Base):
+    __tablename__ = "combat_encounters"
+    __table_args__ = (UniqueConstraint("save_id", name="uq_combat_encounter_save"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    save_id: Mapped[str] = mapped_column(String(36), index=True)
+    enemy_id: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    state_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )

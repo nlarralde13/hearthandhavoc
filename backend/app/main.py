@@ -7,21 +7,29 @@ from sqlalchemy.orm import Session
 from app.auth import actor_id
 from app.content import validate_all_content
 from app.db import get_db
+from app.domain.combat import CombatError
 from app.schemas import (
     ActionRequest,
     ActionResponse,
+    CombatActionRequest,
+    CombatActionResponse,
+    CombatStateResponse,
     CreateSaveRequest,
     RouteMapResponse,
     SaveState,
+    StartCombatRequest,
 )
 from app.services import (
+    CombatNotFound,
     SaveNotFound,
     StateConflict,
+    combat_action,
     create_save,
     get_save,
     perform_action,
     route_map,
     serialize_state,
+    start_combat,
 )
 
 
@@ -71,6 +79,40 @@ def save_map(
         return route_map(db, owner_id, save_id)
     except SaveNotFound:
         raise HTTPException(status_code=404, detail="save not found") from None
+
+
+@app.post("/api/v1/saves/{save_id}/combat", response_model=CombatStateResponse)
+def begin_combat(
+    save_id: str,
+    request: StartCombatRequest,
+    db: Session = Depends(get_db),
+    owner_id: str = Depends(actor_id),
+) -> CombatStateResponse:
+    try:
+        return start_combat(db, owner_id, save_id, request.enemy_id)
+    except SaveNotFound:
+        raise HTTPException(status_code=404, detail="save not found") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+@app.post("/api/v1/saves/{save_id}/combat/actions", response_model=CombatActionResponse)
+def do_combat_action(
+    save_id: str,
+    request: CombatActionRequest,
+    db: Session = Depends(get_db),
+    owner_id: str = Depends(actor_id),
+) -> CombatActionResponse:
+    try:
+        return combat_action(db, owner_id, save_id, request)
+    except SaveNotFound:
+        raise HTTPException(status_code=404, detail="save not found") from None
+    except CombatNotFound:
+        raise HTTPException(status_code=404, detail="combat encounter not found") from None
+    except StateConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    except (CombatError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
 
 
 @app.post("/api/v1/saves/{save_id}/actions", response_model=ActionResponse)

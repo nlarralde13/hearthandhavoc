@@ -45,3 +45,33 @@ class ActionResponse(BaseModel):
     replayed: bool = False
     events: list[dict[str, Any]]
     state: SaveState
+
+
+class StartCombatRequest(BaseModel):
+    enemy_id: Literal["goblin"] = "goblin"
+
+
+class CombatActionRequest(BaseModel):
+    action_id: str = Field(min_length=1, max_length=64)
+    action: Literal["attack", "defend"]
+    expected_action_index: int = Field(ge=0)
+
+
+class CombatStateResponse(BaseModel):
+    encounter_id: str
+    enemy_id: str
+    turn: Literal["player", "enemy"]
+    status: Literal["active", "victory", "defeat"]
+    round: int
+    action_index: int
+    player_hp: int
+    player_max_hp: int
+    enemy_hp: int
+    enemy_max_hp: int
+
+
+class CombatActionResponse(BaseModel):
+    action_id: str
+    replayed: bool = False
+    events: list[dict[str, Any]]
+    state: CombatStateResponse
