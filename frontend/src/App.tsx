@@ -1,4 +1,4 @@
-import { type FormEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 type SaveState = {
   save_id: string;
@@ -104,8 +104,6 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("home");
   const [journalOpen, setJournalOpen] = useState(false);
-  const [journalPosition, setJournalPosition] = useState({ x: 0, y: 0 });
-  const journalDrag = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const [expandedModule, setExpandedModule] = useState<ModuleId | null>(null);
   const [command, setCommand] = useState("");
   const [commandNotice, setCommandNotice] = useState<string | null>(null);
@@ -358,34 +356,6 @@ export default function App() {
     setActiveTab(tab);
   }
 
-  function startJournalDrag(event: ReactPointerEvent<HTMLDivElement>) {
-    if (event.button !== 0) return;
-    journalDrag.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      originX: journalPosition.x,
-      originY: journalPosition.y,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function moveJournalDrag(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!journalDrag.current) return;
-    const nextX = journalDrag.current.originX + event.clientX - journalDrag.current.startX;
-    const nextY = journalDrag.current.originY + event.clientY - journalDrag.current.startY;
-    setJournalPosition({
-      x: Math.max(-120, Math.min(720, nextX)),
-      y: Math.max(-420, Math.min(120, nextY)),
-    });
-  }
-
-  function endJournalDrag(event: ReactPointerEvent<HTMLDivElement>) {
-    journalDrag.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  }
-
   return (
     <main className="shell">
       <div className="game-console">
@@ -536,10 +506,10 @@ export default function App() {
         </button>)}
       </nav>
       {journalOpen && <div className="journal-overlay" role="presentation">
-        <section className="journal-ledger" role="dialog" aria-labelledby="journal-title" style={{ transform: `translate(${journalPosition.x}px, ${journalPosition.y}px)` }}>
-          <div className="ledger-header" onPointerDown={startJournalDrag} onPointerMove={moveJournalDrag} onPointerUp={endJournalDrag} onPointerCancel={endJournalDrag}>
+        <section className="journal-ledger" role="dialog" aria-labelledby="journal-title">
+          <div className="ledger-header">
             <div><p className="eyebrow">Adventure ledger</p><h2 id="journal-title">Journal</h2></div>
-            <button className="ledger-close" onPointerDown={(event) => event.stopPropagation()} onClick={() => setJournalOpen(false)} aria-label="Close journal">×</button>
+            <button className="ledger-close" onClick={() => setJournalOpen(false)} aria-label="Close journal">×</button>
           </div>
           <section className="ledger-section">
             <div className="ledger-section-heading"><span>Open quests</span><small>0 active</small></div>
