@@ -1,0 +1,10 @@
+{
+  "content_version": "0.1.0",
+  "enemy_id": "goblin",
+  "display_name": "Goblin",
+  "max_hp": 8,
+  "armor_class": 10,
+  "attack_bonus": 2,
+  "damage_sides": 4,
+  "ordinary_loot": ["common_wood"]
+}
