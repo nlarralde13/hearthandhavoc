@@ -228,3 +228,18 @@ body { overflow: hidden; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .combat-bars { grid-template-columns: 1fr; gap: 18px; }
 }
+
+/* The journal is attached to the console, not a modal that captures the page. */
+.game-console { position: relative; }
+.journal-overlay { position: absolute; inset: auto 20px 96px auto; display: block; width: min(590px, calc(100% - 40px)); padding: 0; pointer-events: none; background: transparent; backdrop-filter: none; }
+.journal-ledger { width: 100%; max-height: min(64dvh, 560px); pointer-events: auto; box-shadow: 0 10px 24px rgba(0, 0, 0, .55), 0 0 0 1px rgba(231, 163, 72, .12); }
+.journal-ledger .ledger-header { padding: 16px 18px 12px; }
+.journal-ledger .ledger-section { padding: 14px 18px; }
+.journal-ledger .ledger-list { max-height: 240px; }
+.journal-ledger .ledger-close { cursor: pointer; }
+.home-console-surface .dashboard-grid { padding-bottom: 2px; }
+
+@media (max-width: 720px) {
+  .journal-overlay { right: 10px; bottom: 82px; width: calc(100% - 20px); }
+  .journal-ledger { max-height: 68dvh; }
+}

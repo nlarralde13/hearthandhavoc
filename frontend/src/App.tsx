@@ -123,7 +123,8 @@ export default function App() {
         setRouteMap(await request<RouteMap>(`/api/v1/saves/${created.save_id}/map`));
         setEvents([
           "SYSTEM // NEW ADVENTURE INITIALIZED · BLACKSMITH PROFILE LOADED",
-          "NARRATIVE // You take stock of the damaged shack.",
+          "SYSTEM // HOMESTEAD ONLINE · WESTERN ROAD AVAILABLE",
+          "NARRATIVE // The damaged shack is behind you. The road west waits beyond the gate.",
         ]);
         return;
       }
@@ -132,7 +133,8 @@ export default function App() {
       setRouteMap(await request<RouteMap>(`/api/v1/saves/${loaded.save_id}/map`));
       setEvents([
         `SYSTEM // LINK RESTORED · SAVE ${loaded.save_id.slice(0, 8).toUpperCase()} RESUMED`,
-        "NARRATIVE // The road west waits beyond the damaged shack.",
+        "SYSTEM // HOMESTEAD ONLINE · WESTERN ROAD AVAILABLE",
+        "NARRATIVE // The damaged shack is behind you. The road west waits beyond the gate.",
       ]);
       try {
         setCombat(await request<CombatState>(`/api/v1/saves/${loaded.save_id}/combat`));
@@ -377,25 +379,11 @@ export default function App() {
         <div className="status-metric"><span>HP</span><strong>— / —</strong><small>not modeled</small></div>
         <div className="status-metric"><span>Stamina</span><strong>—</strong><small>not modeled</small></div>
         <div className="status-metric"><span>Wood</span><strong>{state?.resources.wood ?? 0}</strong><small>carried</small></div>
+        <div className="status-metric"><span>Turn</span><strong data-testid="adventure-turn">{state?.route_offset ?? "—"} / {routeMap?.length ?? 20}</strong><small>western road</small></div>
         <div className="status-metric"><span>State</span><strong>v{state?.state_version ?? "—"}</strong><small>saved</small></div>
       </section>
 
       <section className={`console-content ${activeTab === "home" ? "home-console-surface" : ""}`}>
-      {activeTab === "home" && <section className="console-narrative">
-        <div>
-          <p className="eyebrow">Home terminal · {routeMap?.display_name ?? "Western Road"}</p>
-          <h2>Connection established.</h2>
-          <p className="muted">
-            The damaged shack is behind you. The western road is open, the forest is quiet,
-            and the old world is waiting for input.
-          </p>
-        </div>
-        <div className="turn-card">
-          <span>Adventure turn</span>
-          <strong data-testid="adventure-turn">{state?.route_offset ?? "—"}<small> / {routeMap?.length ?? 20}</small></strong>
-        </div>
-      </section>}
-
       {activeTab === "home" && <section className="dashboard-grid">
         <article className={`card console-module route-card ${expandedModule === "route" ? "expanded" : "collapsed"}`}>
           <button className="module-heading" onClick={() => toggleModule("route")} aria-expanded={expandedModule === "route"}>
@@ -517,9 +505,8 @@ export default function App() {
           <span className="nav-icon">{item.icon}</span><span>{item.label}</span>
         </button>)}
       </nav>
-      </div>
-      {journalOpen && <div className="journal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setJournalOpen(false); }}>
-        <section className="journal-ledger" role="dialog" aria-modal="true" aria-labelledby="journal-title">
+      {journalOpen && <div className="journal-overlay" role="presentation">
+        <section className="journal-ledger" role="dialog" aria-labelledby="journal-title">
           <div className="ledger-header">
             <div><p className="eyebrow">Adventure ledger</p><h2 id="journal-title">Journal</h2></div>
             <button className="ledger-close" onClick={() => setJournalOpen(false)} aria-label="Close journal">×</button>
@@ -537,6 +524,7 @@ export default function App() {
           </section>
         </section>
       </div>}
+      </div>
     </main>
   );
 }

@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("player can travel, discover Timberwood, and reload progress", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Connection established." })).toBeVisible();
+  await expect(page.getByText("SYSTEM // HOMESTEAD ONLINE · WESTERN ROAD AVAILABLE")).toBeVisible();
   await expect(page.getByTestId("adventure-turn")).toHaveText("0 / 20");
   await page.getByRole("button", { name: "Pause auto-travel" }).click();
   await page.getByRole("button", { name: /Known route Western Road/ }).click();
