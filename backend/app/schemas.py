@@ -9,7 +9,7 @@ class CreateSaveRequest(BaseModel):
 
 class ActionRequest(BaseModel):
     action_id: str = Field(min_length=1, max_length=64)
-    action: Literal["travel.advance"]
+    action: Literal["travel.advance", "gather.wood"]
     expected_state_version: int = Field(ge=1)
     payload: dict[str, Any] = Field(default_factory=dict)
 
@@ -22,6 +22,7 @@ class SaveState(BaseModel):
     route_id: str
     route_offset: int
     discovered_locations: list[str]
+    resources: dict[str, int]
 
 
 class RouteWaypointView(BaseModel):

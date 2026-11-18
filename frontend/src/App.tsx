@@ -8,6 +8,7 @@ type SaveState = {
   route_id: string;
   route_offset: number;
   discovered_locations: string[];
+  resources: Record<string, number>;
 };
 
 type ActionResponse = {
@@ -164,6 +165,29 @@ export default function App() {
       setBusy(false);
     }
   }, [busy, routeMap?.length, state]);
+
+  async function gatherWood() {
+    if (!state || busy || !state.discovered_locations.includes("old_timberwood")) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await request<ActionResponse>(`/api/v1/saves/${state.save_id}/actions`, {
+        method: "POST",
+        body: JSON.stringify({
+          action_id: actionId(),
+          action: "gather.wood",
+          expected_state_version: state.state_version,
+          payload: { location_id: "old_timberwood" },
+        }),
+      });
+      setState(response.state);
+      setEvents((current) => ["You gather 3 wood from Old Timberwood.", ...current]);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to gather wood.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (!autoTravel || busy || !state || state.route_offset >= (routeMap?.length ?? 20)) return;
@@ -352,6 +376,22 @@ export default function App() {
                 ) : <p className="muted">The encounter is resolved. The forest resumes pretending it saw nothing.</p>}
               </>
             )}
+          </article>
+        )}
+
+        {state?.discovered_locations.includes("old_timberwood") && (
+          <article className="card resource-card">
+            <div className="card-heading">
+              <div>
+                <p className="eyebrow">Gathering</p>
+                <h3>Old Timberwood</h3>
+              </div>
+              <span className="resource-count">Wood · {state.resources.wood ?? 0}</span>
+            </div>
+            <p className="muted">The old trees are sturdy enough to become something useful.</p>
+            <button className="primary-button" onClick={() => void gatherWood()} disabled={busy}>
+              Gather wood
+            </button>
           </article>
         )}
 

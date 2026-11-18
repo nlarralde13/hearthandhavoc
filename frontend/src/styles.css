@@ -53,6 +53,8 @@ h3 { margin-bottom: 0; font-family: Georgia, serif; font-size: 1.5rem; font-weig
 .muted { color: #aaa2a0; line-height: 1.7; }
 .notice { margin-bottom: 24px; padding: 14px 18px; border: 1px solid #864d4d; color: #f0b1a3; background: #2b1c21; font-size: .9rem; overflow-wrap: anywhere; }
 .combat-card { grid-column: 1 / -1; }
+.resource-card { grid-column: 1 / -1; }
+.resource-count { color: #c99762; font-size: .85rem; font-weight: 700; }
 .combat-status { color: #aaa2a0; font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .combat-status.victory { color: #9eaf83; }
 .combat-status.defeat { color: #d47b6f; }

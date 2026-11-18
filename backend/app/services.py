@@ -13,6 +13,7 @@ from app.domain.combat import (
     resolve_player_action,
     start_encounter,
 )
+from app.domain.gathering import gather_wood
 from app.domain.travel import TravelState, advance
 from app.models import ActionReceipt, CombatEncounter, Save
 from app.schemas import (
@@ -46,6 +47,7 @@ def serialize_state(save: Save) -> SaveState:
         route_id=save.route_id,
         route_offset=save.route_offset,
         discovered_locations=json.loads(save.discovered_locations),
+        resources=json.loads(save.resources),
     )
 
 
@@ -83,12 +85,21 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
             f"{request.expected_state_version}, current is {save.state_version}"
         )
 
-    current = TravelState(
-        save.route_id, save.route_offset, frozenset(json.loads(save.discovered_locations))
-    )
-    result = advance(load_route(save.route_id), current)
+    discovered = frozenset(json.loads(save.discovered_locations))
+    if request.action == "gather.wood":
+        location_id = request.payload.get("location_id")
+        result = gather_wood(discovered, json.loads(save.resources), location_id)
+        next_offset = save.route_offset
+        next_discovered = save.discovered_locations
+        next_resources = json.dumps(result.resources, sort_keys=True)
+    else:
+        current = TravelState(save.route_id, save.route_offset, discovered)
+        travel_result = advance(load_route(save.route_id), current)
+        result = travel_result
+        next_offset = result.state.offset
+        next_discovered = json.dumps(sorted(result.state.discovered))
+        next_resources = save.resources
 
-    next_discovered = json.dumps(sorted(result.state.discovered))
     next_version = save.state_version + 1
     updated = db.execute(
         update(Save)
@@ -98,8 +109,9 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
             Save.state_version == request.expected_state_version,
         )
         .values(
-            route_offset=result.state.offset,
+            route_offset=next_offset,
             discovered_locations=next_discovered,
+            resources=next_resources,
             state_version=next_version,
         )
     )
@@ -121,8 +133,9 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
             f"{request.expected_state_version}, current is {current_save.state_version}"
         )
 
-    save.route_offset = result.state.offset
+    save.route_offset = next_offset
     save.discovered_locations = next_discovered
+    save.resources = next_resources
     save.state_version = next_version
     response = ActionResponse(
         action_id=request.action_id,

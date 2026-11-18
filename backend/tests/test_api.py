@@ -20,6 +20,7 @@ def test_create_load_and_replay_travel() -> None:
         created = response.json()
         assert "root_seed" not in created
         assert created["state_version"] == 1
+        assert created["resources"] == {"wood": 0}
 
         command = {
             "action_id": "travel-1",
@@ -102,6 +103,53 @@ def test_map_hides_undiscovered_waypoint_identity() -> None:
             "label": "Old Timberwood",
             "known": True,
         }
+
+
+def test_gathering_requires_discovery_and_is_idempotent() -> None:
+    with TestClient(app) as client:
+        headers = {"X-Dev-User-ID": "gather-user"}
+        created = client.post("/api/v1/saves", headers=headers, json={}).json()
+        url = f"/api/v1/saves/{created['save_id']}/actions"
+
+        blocked = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "gather-before-discovery",
+                "action": "gather.wood",
+                "expected_state_version": 1,
+                "payload": {"location_id": "old_timberwood"},
+            },
+        )
+        assert blocked.status_code == 422
+
+        current = created
+        for turn in range(1, 7):
+            current = client.post(
+                url,
+                headers=headers,
+                json={
+                    "action_id": f"gather-travel-{turn}",
+                    "action": "travel.advance",
+                    "expected_state_version": turn,
+                    "payload": {},
+                },
+            ).json()["state"]
+
+        command = {
+            "action_id": "gather-wood-1",
+            "action": "gather.wood",
+            "expected_state_version": current["state_version"],
+            "payload": {"location_id": "old_timberwood"},
+        }
+        first = client.post(url, headers=headers, json=command)
+        assert first.status_code == 200
+        assert first.json()["state"]["resources"] == {"wood": 3}
+
+        replay = client.post(url, headers=headers, json=command)
+        assert replay.status_code == 200
+        assert replay.json()["replayed"] is True
+        assert replay.json()["state"]["resources"] == {"wood": 3}
 
 
 def test_stale_loaded_session_cannot_overwrite_a_newer_action() -> None:

@@ -23,6 +23,7 @@ class Save(Base):
     route_id: Mapped[str] = mapped_column(String(64), default="western_road")
     route_offset: Mapped[int] = mapped_column(Integer, default=0)
     discovered_locations: Mapped[str] = mapped_column(Text, default="[]")
+    resources: Mapped[str] = mapped_column(Text, default='{"wood": 0}')
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now

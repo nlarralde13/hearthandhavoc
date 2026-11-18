@@ -19,3 +19,8 @@ database. Never stamp or drop a shared/production database as a shortcut.
 
 Every future migration must include a compatibility note for existing saves,
 an upgrade test, and a rollback or forward-only rationale.
+
+Migration `0003_save_resources` adds the JSON resource inventory to existing
+saves with an initial wood count of zero. It is backward-compatible with the
+current development save format; downgrade removes the inventory column and is
+therefore only appropriate before resource-bearing saves need to be retained.
