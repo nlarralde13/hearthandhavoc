@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 type SaveState = {
   save_id: string;
@@ -50,6 +50,17 @@ type CombatActionResponse = {
   state: CombatState;
 };
 
+type TabId = "journal" | "map" | "home" | "character" | "inventory";
+
+type ActionDefinition = {
+  id: string;
+  label: string;
+  icon: string;
+  enabled: boolean;
+  hint?: string;
+  run?: () => void;
+};
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const USER_KEY = "hearth-and-havoc-dev-user";
 const SAVE_KEY = "hearth-and-havoc-save-id";
@@ -90,6 +101,9 @@ export default function App() {
   const [autoTravel, setAutoTravel] = useState(true);
   const [countdown, setCountdown] = useState(AUTO_TRAVEL_DELAY_SECONDS);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabId>("home");
+  const [command, setCommand] = useState("");
+  const [commandNotice, setCommandNotice] = useState<string | null>(null);
 
   const loadSave = useCallback(async () => {
     setBusy(true);
@@ -272,8 +286,47 @@ export default function App() {
     }
   }
 
+  const navigation: Array<{ id: TabId; label: string; icon: string }> = [
+    { id: "journal", label: "Journal", icon: "▤" },
+    { id: "map", label: "World Map", icon: "✧" },
+    { id: "home", label: "Home", icon: "⌂" },
+    { id: "character", label: "Character", icon: "♙" },
+    { id: "inventory", label: "Inventory", icon: "▣" },
+  ];
+
+  const actions: ActionDefinition[] = combat?.status === "active"
+    ? [
+        { id: "attack", label: "Attack", icon: "⚔", enabled: !busy && combat.turn === "player", run: () => void combatAction("attack") },
+        { id: "defend", label: "Defend", icon: "◇", enabled: !busy && combat.turn === "player", run: () => void combatAction("defend") },
+        { id: "skills", label: "Skills", icon: "✦", enabled: false, hint: "Skills are not implemented yet." },
+        { id: "items", label: "Items", icon: "▣", enabled: false, hint: "Combat items are not implemented yet." },
+      ]
+    : [
+        { id: "travel", label: "Advance", icon: "➜", enabled: Boolean(state) && !busy && state?.route_offset !== routeMap?.length, run: () => void advanceTravel() },
+        { id: "gather", label: "Gather", icon: "❖", enabled: Boolean(state?.discovered_locations.includes("old_timberwood")) && !busy, hint: "Gather wood at Old Timberwood.", run: () => void gatherWood() },
+        { id: "explore", label: "Explore", icon: "⌖", enabled: false, hint: "Exploration actions are coming with the next location." },
+        { id: "craft", label: "Craft", icon: "◆", enabled: false, hint: "Crafting is not implemented yet." },
+      ];
+
+  function submitCommand(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!command.trim()) return;
+    setCommandNotice("Conversation is not connected yet. Your message was not sent.");
+  }
+
+  function renderEmptyPanel(title: string, eyebrow: string, body: string) {
+    return (
+      <section className="panel-empty">
+        <p className="eyebrow">{eyebrow}</p>
+        <h2>{title}</h2>
+        <p className="muted">{body}</p>
+      </section>
+    );
+  }
+
   return (
     <main className="shell">
+      <div className="game-console">
       <header className="masthead">
         <div>
           <p className="eyebrow">A small world, stubbornly alive</p>
@@ -289,7 +342,15 @@ export default function App() {
 
       {error && <div className="notice error">{error}</div>}
 
-      <section className="hero-panel">
+      <section className="character-strip" aria-label="Character status">
+        <div className="character-identity"><span className="crest">♜</span><div><strong>Blacksmith</strong><small>Development save · turn {state?.route_offset ?? "—"}</small></div></div>
+        <div className="status-metric"><span>HP</span><strong>— / —</strong><small>not modeled</small></div>
+        <div className="status-metric"><span>Stamina</span><strong>—</strong><small>not modeled</small></div>
+        <div className="status-metric"><span>Wood</span><strong>{state?.resources.wood ?? 0}</strong><small>carried</small></div>
+        <div className="status-metric"><span>State</span><strong>v{state?.state_version ?? "—"}</strong><small>saved</small></div>
+      </section>
+
+      {activeTab === "home" && <section className="hero-panel">
         <div>
           <p className="eyebrow">Homestead · {routeMap?.display_name ?? "Western Road"}</p>
           <h2>The road west waits.</h2>
@@ -302,9 +363,9 @@ export default function App() {
           <span>Adventure turn</span>
           <strong data-testid="adventure-turn">{state?.route_offset ?? "—"}<small> / {routeMap?.length ?? 20}</small></strong>
         </div>
-      </section>
+      </section>}
 
-      <section className="dashboard-grid">
+      {activeTab === "home" && <section className="dashboard-grid">
         <article className="card route-card">
           <div className="card-heading">
             <div>
@@ -407,7 +468,35 @@ export default function App() {
             {events.map((event, index) => <li key={`${event}-${index}`}>{event}</li>)}
           </ol>
         </article>
+      </section>}
+
+      {activeTab === "journal" && renderEmptyPanel("The road's record", "Journal", "Discoveries and event history will collect here as the world grows.")}
+      {activeTab === "map" && renderEmptyPanel("Western Road", "World Map", "The discovered route remains visible on Home. A broader world map will arrive with the next region.")}
+      {activeTab === "character" && renderEmptyPanel("A craftsperson on the road", "Character", "Attributes, mastery, equipment, and progression are not modeled in this vertical slice yet.")}
+      {activeTab === "inventory" && renderEmptyPanel("Carried supplies", "Inventory", `Wood: ${state?.resources.wood ?? 0}. Item slots and equipment will be added with crafting.`)}
+
+      <form className="command-bar" onSubmit={submitCommand}>
+        <button type="button" className="command-mode">▰ Talk <span>⌄</span></button>
+        <input value={command} onChange={(event) => { setCommand(event.target.value); setCommandNotice(null); }} placeholder="Type a message or command…" aria-label="Message or command" />
+        <button className="send-button" type="submit" disabled={!command.trim()}>Send</button>
+      </form>
+      {commandNotice && <p className="command-notice">{commandNotice}</p>}
+
+      <section className="action-panel" aria-label="Contextual actions">
+        <div className="section-heading"><div><p className="eyebrow">Available actions</p><h3>{combat?.status === "active" ? "Combat" : "Current context"}</h3></div><small>{combat?.status === "active" ? "Choose your move." : "The road waits."}</small></div>
+        <div className="action-grid">
+          {actions.map((action) => <button key={action.id} className={`action-button ${combat?.status === "active" ? "combat-action-button" : ""}`} disabled={!action.enabled} title={action.hint} onClick={action.run}>
+            <span className="action-icon">{action.icon}</span><span>{action.label}</span>
+          </button>)}
+        </div>
       </section>
+
+      <nav className="bottom-navigation" aria-label="Game navigation">
+        {navigation.map((item) => <button key={item.id} className={`nav-button ${activeTab === item.id ? "active" : ""}`} onClick={() => setActiveTab(item.id)} aria-current={activeTab === item.id ? "page" : undefined}>
+          <span className="nav-icon">{item.icon}</span><span>{item.label}</span>
+        </button>)}
+      </nav>
+      </div>
     </main>
   );
 }

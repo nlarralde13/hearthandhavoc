@@ -69,6 +69,67 @@ h3 { margin-bottom: 0; color: #eee7d5; font-family: "Courier New", Courier, mono
 .secondary-button:hover:not(:disabled) { border-color: #d2a85b; color: #f0d18a; background: #303142; }
 .secondary-button:disabled { cursor: not-allowed; opacity: .5; }
 
+/* Phase 1 console shell: the existing gameplay cards remain inside this frame. */
+.shell { max-width: 1440px; min-height: 100vh; padding: 28px 24px 40px; }
+.game-console { width: min(92vw, 1320px); margin: 0 auto; padding: 20px; border: 2px solid #4e4a3c; background: #1b1d19; box-shadow: 0 0 0 7px #0b0d0a, 0 16px 0 #090a08; }
+.game-console .masthead { margin-bottom: 14px; padding: 8px 12px 16px; border-bottom: 1px solid #4e4a3c; }
+.character-strip { display: flex; align-items: center; gap: 24px; margin-bottom: 16px; padding: 12px 16px; border: 1px solid #4e4a3c; background: #111310; }
+.character-identity { display: flex; align-items: center; gap: 12px; min-width: 230px; }
+.character-identity strong, .character-identity small, .status-metric span, .status-metric strong, .status-metric small { display: block; }
+.character-identity strong { color: #e5ddc9; font-family: Georgia, serif; font-size: 1.05rem; }
+.character-identity small, .status-metric small { margin-top: 4px; color: #a39c89; font-size: .68rem; }
+.crest { display: grid; width: 38px; height: 42px; place-items: center; border: 1px solid #c4a46a; color: #e7a348; background: #282b25; font-size: 1.35rem; }
+.status-metric { min-width: 92px; padding-left: 18px; border-left: 1px solid #4e4a3c; }
+.status-metric span { color: #a39c89; font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; }
+.status-metric strong { margin-top: 4px; color: #e5ddc9; font-size: .9rem; }
+.game-console .hero-panel { border-color: #4e4a3c; background: #282b25; box-shadow: 6px 6px 0 #0d0f0c; }
+.game-console .card { border-color: #4e4a3c; background: #20231e; box-shadow: none; }
+.command-bar { display: grid; grid-template-columns: 150px 1fr 92px; gap: 8px; margin: 16px 0 6px; padding: 8px; border: 1px solid #4e4a3c; background: #111310; }
+.command-mode, .send-button { border: 1px solid #c4a46a; color: #e5ddc9; background: #282b25; cursor: pointer; font-weight: 700; }
+.command-mode span { color: #e7a348; }
+.command-bar input { min-width: 0; padding: 12px 14px; border: 1px solid #4e4a3c; outline: 0; color: #e5ddc9; background: #1b1d19; font: inherit; font-style: italic; }
+.command-bar input:focus { border-color: #e7a348; }
+.send-button { color: #171914; background: #c4a46a; }
+.send-button:disabled { cursor: not-allowed; opacity: .45; }
+.command-notice { margin: 4px 8px 0; color: #a39c89; font-size: .72rem; text-align: right; }
+.action-panel { margin-top: 16px; padding: 16px; border: 1px solid #4e4a3c; background: #282b25; }
+.section-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.section-heading h3 { margin: 0; color: #e5ddc9; font-family: Georgia, serif; }
+.section-heading small { color: #a39c89; }
+.action-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.action-button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 54px; border: 1px solid #4e4a3c; color: #e5ddc9; background: #1b1d19; cursor: pointer; font-weight: 700; }
+.action-button:hover:not(:disabled) { border-color: #e7a348; color: #e7a348; background: #282b25; }
+.action-button:disabled { cursor: not-allowed; color: #625f54; background: #171914; }
+.combat-action-button { border-color: #71392f; background: #321e1a; }
+.action-icon { color: #c4a46a; font-size: 1.25rem; }
+.bottom-navigation { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #4e4a3c; }
+.nav-button { display: grid; justify-items: center; gap: 5px; min-height: 66px; padding: 10px 6px; border: 1px solid #4e4a3c; color: #a39c89; background: #111310; cursor: pointer; font-size: .78rem; font-weight: 700; }
+.nav-button:hover { border-color: #c4a46a; color: #e5ddc9; }
+.nav-button.active { border-color: #e7a348; color: #f0c16e; background: #3a291a; box-shadow: 0 0 12px rgba(231, 163, 72, .28); }
+.nav-icon { color: inherit; font-size: 1.4rem; line-height: 1; }
+.panel-empty { min-height: 420px; display: grid; align-content: center; justify-items: center; padding: 50px; border: 1px solid #4e4a3c; background: #20231e; text-align: center; }
+.panel-empty h2 { margin-bottom: 10px; font-family: Georgia, serif; }
+.panel-empty .muted { max-width: 520px; }
+
+@media (max-width: 900px) {
+  .character-strip { flex-wrap: wrap; }
+  .character-identity { flex: 1 1 100%; }
+  .status-metric { flex: 1; }
+}
+
+@media (max-width: 720px) {
+  .shell { padding: 12px 8px 24px; }
+  .game-console { width: 100%; padding: 10px; box-shadow: 0 8px 0 #090a08; }
+  .game-console .masthead { align-items: start; }
+  .command-bar { grid-template-columns: 1fr 82px; }
+  .command-mode { grid-column: 1 / -1; min-height: 38px; }
+  .action-grid { grid-template-columns: repeat(2, 1fr); }
+  .bottom-navigation { gap: 4px; }
+  .nav-button { min-height: 58px; font-size: .65rem; }
+  .character-strip { gap: 12px; padding: 10px; }
+  .status-metric { min-width: 70px; padding-left: 10px; }
+}
+
 @media (max-width: 720px) {
   .shell { padding: 28px 18px 48px; }
   .masthead { align-items: start; margin-bottom: 36px; }
