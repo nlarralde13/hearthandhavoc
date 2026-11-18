@@ -1,5 +1,7 @@
-from app.db import Base, engine
+from app.db import Base, SessionLocal, engine
 from app.main import app
+from app.schemas import ActionRequest
+from app.services import StateConflict, create_save, get_save, perform_action
 from fastapi.testclient import TestClient
 
 
@@ -59,3 +61,37 @@ def test_saves_are_owned_by_the_authenticated_actor() -> None:
             headers={"X-Dev-User-ID": "different-user"},
         )
         assert response.status_code == 404
+
+
+def test_stale_loaded_session_cannot_overwrite_a_newer_action() -> None:
+    first_session = SessionLocal()
+    second_session = SessionLocal()
+    try:
+        created = create_save(first_session, "concurrency-user", "blacksmith")
+        get_save(second_session, "concurrency-user", created.save_id)
+        request = ActionRequest(
+            action_id="concurrent-travel",
+            action="travel.advance",
+            expected_state_version=1,
+        )
+
+        perform_action(first_session, "concurrency-user", created.save_id, request)
+
+        try:
+            perform_action(
+                second_session,
+                "concurrency-user",
+                created.save_id,
+                request.model_copy(update={"action_id": "concurrent-travel-2"}),
+            )
+        except StateConflict:
+            pass
+        else:
+            raise AssertionError("stale session unexpectedly changed the save")
+
+        current = get_save(first_session, "concurrency-user", created.save_id)
+        assert current.route_offset == 1
+        assert current.state_version == 2
+    finally:
+        first_session.close()
+        second_session.close()

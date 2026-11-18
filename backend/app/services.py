@@ -1,7 +1,7 @@
 import json
 import secrets
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.domain.travel import WESTERN_ROAD, TravelState, advance
@@ -67,9 +67,43 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
         save.route_id, save.route_offset, frozenset(json.loads(save.discovered_locations))
     )
     result = advance(WESTERN_ROAD, current)
+
+    next_discovered = json.dumps(sorted(result.state.discovered))
+    next_version = save.state_version + 1
+    updated = db.execute(
+        update(Save)
+        .where(
+            Save.id == save.id,
+            Save.owner_id == owner_id,
+            Save.state_version == request.expected_state_version,
+        )
+        .values(
+            route_offset=result.state.offset,
+            discovered_locations=next_discovered,
+            state_version=next_version,
+        )
+    )
+    if updated.rowcount != 1:
+        db.rollback()
+        replay = db.scalar(
+            select(ActionReceipt).where(
+                ActionReceipt.save_id == save_id,
+                ActionReceipt.action_id == request.action_id,
+            )
+        )
+        if replay is not None:
+            replayed_result = json.loads(replay.result_json)
+            replayed_result["replayed"] = True
+            return ActionResponse(**replayed_result)
+        current_save = get_save(db, owner_id, save_id)
+        raise StateConflict(
+            "expected state version "
+            f"{request.expected_state_version}, current is {current_save.state_version}"
+        )
+
     save.route_offset = result.state.offset
-    save.discovered_locations = json.dumps(sorted(result.state.discovered))
-    save.state_version += 1
+    save.discovered_locations = next_discovered
+    save.state_version = next_version
     response = ActionResponse(
         action_id=request.action_id,
         state_version=save.state_version,
