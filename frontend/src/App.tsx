@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type SaveState = {
   save_id: string;
@@ -104,6 +104,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("home");
   const [journalOpen, setJournalOpen] = useState(false);
+  const [journalPosition, setJournalPosition] = useState({ x: 0, y: 0 });
+  const journalDrag = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const [expandedModule, setExpandedModule] = useState<ModuleId | null>(null);
   const [command, setCommand] = useState("");
   const [commandNotice, setCommandNotice] = useState<string | null>(null);
@@ -349,11 +351,39 @@ export default function App() {
 
   function navigateTo(tab: TabId) {
     if (tab === "journal") {
-      setJournalOpen(true);
+      setJournalOpen((current) => !current);
       return;
     }
     setJournalOpen(false);
     setActiveTab(tab);
+  }
+
+  function startJournalDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+    journalDrag.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: journalPosition.x,
+      originY: journalPosition.y,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveJournalDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!journalDrag.current) return;
+    const nextX = journalDrag.current.originX + event.clientX - journalDrag.current.startX;
+    const nextY = journalDrag.current.originY + event.clientY - journalDrag.current.startY;
+    setJournalPosition({
+      x: Math.max(-120, Math.min(720, nextX)),
+      y: Math.max(-420, Math.min(120, nextY)),
+    });
+  }
+
+  function endJournalDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    journalDrag.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   }
 
   return (
@@ -506,21 +536,18 @@ export default function App() {
         </button>)}
       </nav>
       {journalOpen && <div className="journal-overlay" role="presentation">
-        <section className="journal-ledger" role="dialog" aria-labelledby="journal-title">
-          <div className="ledger-header">
+        <section className="journal-ledger" role="dialog" aria-labelledby="journal-title" style={{ transform: `translate(${journalPosition.x}px, ${journalPosition.y}px)` }}>
+          <div className="ledger-header" onPointerDown={startJournalDrag} onPointerMove={moveJournalDrag} onPointerUp={endJournalDrag} onPointerCancel={endJournalDrag}>
             <div><p className="eyebrow">Adventure ledger</p><h2 id="journal-title">Journal</h2></div>
-            <button className="ledger-close" onClick={() => setJournalOpen(false)} aria-label="Close journal">×</button>
+            <button className="ledger-close" onPointerDown={(event) => event.stopPropagation()} onClick={() => setJournalOpen(false)} aria-label="Close journal">×</button>
           </div>
           <section className="ledger-section">
             <div className="ledger-section-heading"><span>Open quests</span><small>0 active</small></div>
             <p className="ledger-empty">No quests have been recorded yet. The road has not offered terms.</p>
           </section>
-          <section className="ledger-section ledger-events">
-            <div className="ledger-section-heading"><span>Current adventure</span><small>{events.length} entries</small></div>
-            <ol className="ledger-list">
-              {events.length === 0 && <li className="ledger-empty">The ledger is blank.</li>}
-              {events.map((event, index) => <li key={`${event}-${index}`} className={event.startsWith("SYSTEM") ? "ledger-system" : event.startsWith("NARRATIVE") ? "ledger-narrative" : ""}>{event}</li>)}
-            </ol>
+          <section className="ledger-section">
+            <div className="ledger-section-heading"><span>Quest tracker</span><small>Awaiting content</small></div>
+            <p className="ledger-empty">Quest tracking will activate in the next development sprint.</p>
           </section>
         </section>
       </div>}
