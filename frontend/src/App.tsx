@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type SaveState = {
   save_id: string;
@@ -51,7 +51,6 @@ type CombatActionResponse = {
 };
 
 type TabId = "journal" | "map" | "home" | "character" | "inventory";
-type ModuleId = "route" | "encounter" | "gather" | "journal";
 
 type ActionDefinition = {
   id: string;
@@ -88,9 +87,18 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 function actionId(): string {
-  return typeof crypto.randomUUID === "function"
-    ? crypto.randomUUID()
-    : `travel-${Date.now()}`;
+  return typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `action-${Date.now()}`;
+}
+
+function eventClass(message: string): string {
+  if (message.startsWith("SYSTEM")) return "system";
+  if (message.startsWith("NARRATIVE")) return "narrative";
+  if (message.includes("Discovered")) return "discovery";
+  if (message.includes("wood") || message.includes("Wood")) return "resource";
+  if (message.includes("goblin") || message.includes("damage") || message.includes("attack")) return "combat";
+  if (message.includes("warning") || message.includes("failed")) return "warning";
+  if (message.includes("Turn")) return "travel";
+  return "normal";
 }
 
 export default function App() {
@@ -103,10 +111,16 @@ export default function App() {
   const [countdown, setCountdown] = useState(AUTO_TRAVEL_DELAY_SECONDS);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("home");
-  const [journalOpen, setJournalOpen] = useState(false);
-  const [expandedModule, setExpandedModule] = useState<ModuleId | null>(null);
   const [command, setCommand] = useState("");
   const [commandNotice, setCommandNotice] = useState<string | null>(null);
+  const [encounterOpen, setEncounterOpen] = useState(false);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const terminalRef = useRef<HTMLOListElement | null>(null);
+  const terminalNearBottom = useRef(true);
+
+  const appendEvents = useCallback((messages: string[]) => {
+    setEvents((current) => [...current, ...messages]);
+  }, []);
 
   const loadSave = useCallback(async () => {
     setBusy(true);
@@ -137,7 +151,12 @@ export default function App() {
         "NARRATIVE // The damaged shack is behind you. The road west waits beyond the gate.",
       ]);
       try {
-        setCombat(await request<CombatState>(`/api/v1/saves/${loaded.save_id}/combat`));
+        const loadedCombat = await request<CombatState>(`/api/v1/saves/${loaded.save_id}/combat`);
+        setCombat(loadedCombat);
+        if (loadedCombat.status === "active") {
+          setAutoTravel(false);
+          setEncounterOpen(true);
+        }
       } catch {
         setCombat(null);
       }
@@ -153,8 +172,11 @@ export default function App() {
   }, [loadSave]);
 
   useEffect(() => {
-    if (combat?.status === "active") setExpandedModule("encounter");
-  }, [combat?.status]);
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    if (terminalNearBottom.current) terminal.scrollTop = terminal.scrollHeight;
+    else setShowJumpToLatest(true);
+  }, [events]);
 
   const routeProgress = useMemo(() => {
     if (!state) return 0;
@@ -168,33 +190,21 @@ export default function App() {
     try {
       const response = await request<ActionResponse>(`/api/v1/saves/${state.save_id}/actions`, {
         method: "POST",
-        body: JSON.stringify({
-          action_id: actionId(),
-          action: "travel.advance",
-          expected_state_version: state.state_version,
-          payload: {},
-        }),
+        body: JSON.stringify({ action_id: actionId(), action: "travel.advance", expected_state_version: state.state_version, payload: {} }),
       });
       setState(response.state);
       setRouteMap(await request<RouteMap>(`/api/v1/saves/${response.state.save_id}/map`));
       const foundSomething = response.events.some((event) => event.type !== "travel.advanced");
-      if (foundSomething || response.state.route_offset >= (routeMap?.length ?? 20)) {
-        setAutoTravel(false);
-      }
-      setEvents((current) => [
-        ...response.events.map((event) =>
-          event.type === "location.discovered"
-            ? `Discovered: ${event.location_id}`
-            : `The road is quiet. Turn ${event.offset} passes.`,
-        ),
-        ...current,
-      ]);
+      if (foundSomething || response.state.route_offset >= (routeMap?.length ?? 20)) setAutoTravel(false);
+      appendEvents(response.events.map((event) => event.type === "location.discovered"
+        ? `[Turn ${event.offset}] Discovered: ${event.location_id}.`
+        : `[Turn ${event.offset}] You continue west along the old road.`));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to advance travel.");
     } finally {
       setBusy(false);
     }
-  }, [busy, routeMap?.length, state]);
+  }, [appendEvents, busy, routeMap?.length, state]);
 
   async function gatherWood() {
     if (!state || busy || !state.discovered_locations.includes("old_timberwood")) return;
@@ -203,15 +213,10 @@ export default function App() {
     try {
       const response = await request<ActionResponse>(`/api/v1/saves/${state.save_id}/actions`, {
         method: "POST",
-        body: JSON.stringify({
-          action_id: actionId(),
-          action: "gather.wood",
-          expected_state_version: state.state_version,
-          payload: { location_id: "old_timberwood" },
-        }),
+        body: JSON.stringify({ action_id: actionId(), action: "gather.wood", expected_state_version: state.state_version, payload: { location_id: "old_timberwood" } }),
       });
       setState(response.state);
-      setEvents((current) => ["You gather 3 wood from Old Timberwood.", ...current]);
+      appendEvents(`[Turn ${response.state.route_offset}] You collected 3 Wood from Old Timberwood.`.split("\n"));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to gather wood.");
     } finally {
@@ -221,7 +226,6 @@ export default function App() {
 
   useEffect(() => {
     if (!autoTravel || busy || !state || state.route_offset >= (routeMap?.length ?? 20)) return;
-
     setCountdown(AUTO_TRAVEL_DELAY_SECONDS);
     let remaining = AUTO_TRAVEL_DELAY_SECONDS;
     const timer = window.setInterval(() => {
@@ -233,7 +237,6 @@ export default function App() {
       }
       setCountdown(remaining);
     }, 1000);
-
     return () => window.clearInterval(timer);
   }, [advanceTravel, autoTravel, busy, routeMap?.length, state]);
 
@@ -242,14 +245,41 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      const started = await request<CombatState>(`/api/v1/saves/${state.save_id}/combat`, {
-        method: "POST",
-        body: JSON.stringify({ enemy_id: "goblin" }),
-      });
+      const started = await request<CombatState>(`/api/v1/saves/${state.save_id}/combat`, { method: "POST", body: JSON.stringify({ enemy_id: "goblin" }) });
       setCombat(started);
-      setEvents((current) => ["A goblin steps from the trees. It looks confident.", ...current]);
+      setAutoTravel(false);
+      setEncounterOpen(true);
+      appendEvents(`[Turn ${state.route_offset}] A goblin steps from the trees. It looks confident.`.split("\n"));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to start combat.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function combatAction(action: "attack" | "defend") {
+    if (!state || !combat || busy || combat.status !== "active") return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await request<CombatActionResponse>(`/api/v1/saves/${state.save_id}/combat/actions`, {
+        method: "POST",
+        body: JSON.stringify({ action_id: actionId(), action, expected_action_index: combat.action_index }),
+      });
+      setCombat(response.state);
+      const messages = response.events.map((event) => {
+        if (event.type === "combat.victory") return `[Turn ${state.route_offset}] The goblin is defeated.`;
+        if (event.type === "combat.defeat") return `[Turn ${state.route_offset}] You are defeated and wake at home.`;
+        if (event.type === "combat.critical") return `[Turn ${state.route_offset}] Critical strike.`;
+        if (event.type === "combat.damage") return `[Turn ${state.route_offset}] ${event.target === "player" ? "You take" : "The goblin takes"} ${event.amount} damage.`;
+        if (event.type === "combat.player.defend") return `[Turn ${state.route_offset}] You brace behind your battered shield.`;
+        if (event.type === "combat.defend.reduced_damage") return `[Turn ${state.route_offset}] Your guard absorbs part of the blow.`;
+        if (event.type === "combat.enemy.attack") return `[Turn ${state.route_offset}] The goblin attacks.`;
+        return `[Turn ${state.route_offset}] ${action === "attack" ? "You attack the goblin." : "You steady yourself."}`;
+      });
+      appendEvents(messages);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to resolve combat action.");
     } finally {
       setBusy(false);
     }
@@ -261,45 +291,33 @@ export default function App() {
     setState(null);
     setRouteMap(null);
     setCombat(null);
+    setEncounterOpen(false);
     setEvents([]);
     localStorage.removeItem(SAVE_KEY);
     await loadSave();
     setAutoTravel(true);
   }
 
-  async function combatAction(action: "attack" | "defend") {
-    if (!state || !combat || busy || combat.status !== "active") return;
-    setBusy(true);
-    setError(null);
-    try {
-      const response = await request<CombatActionResponse>(
-        `/api/v1/saves/${state.save_id}/combat/actions`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            action_id: actionId(),
-            action,
-            expected_action_index: combat.action_index,
-          }),
-        },
-      );
-      setCombat(response.state);
-      const messages = response.events.map((event) => {
-        if (event.type === "combat.victory") return "The goblin is defeated.";
-        if (event.type === "combat.defeat") return "You are defeated and wake at home.";
-        if (event.type === "combat.critical") return "A critical strike. The goblin objects, briefly.";
-        if (event.type === "combat.damage") return `${event.target === "player" ? "You take" : "The goblin takes"} ${event.amount} damage.`;
-        if (event.type === "combat.player.defend") return "You brace behind your battered shield.";
-        if (event.type === "combat.defend.reduced_damage") return "Your guard absorbs part of the blow.";
-        if (event.type === "combat.enemy.attack") return "The goblin attacks.";
-        return action === "attack" ? "You swing at the goblin." : "You steady yourself.";
-      });
-      setEvents((current) => [...messages, ...current]);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to resolve combat action.");
-    } finally {
-      setBusy(false);
-    }
+  function submitCommand(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!command.trim()) return;
+    setCommandNotice("Conversation is not connected yet. Your message was not sent.");
+  }
+
+  function handleTerminalScroll() {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    const nearBottom = terminal.scrollHeight - terminal.scrollTop - terminal.clientHeight < 48;
+    terminalNearBottom.current = nearBottom;
+    if (nearBottom) setShowJumpToLatest(false);
+  }
+
+  function jumpToLatest() {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    terminalNearBottom.current = true;
+    terminal.scrollTo({ top: terminal.scrollHeight, behavior: "smooth" });
+    setShowJumpToLatest(false);
   }
 
   const navigation: Array<{ id: TabId; label: string; icon: string }> = [
@@ -311,216 +329,73 @@ export default function App() {
   ];
 
   const actions: ActionDefinition[] = combat?.status === "active"
-    ? [
-        { id: "attack", label: "Attack", icon: "⚔", enabled: !busy && combat.turn === "player", run: () => void combatAction("attack") },
-        { id: "defend", label: "Defend", icon: "◇", enabled: !busy && combat.turn === "player", run: () => void combatAction("defend") },
-        { id: "skills", label: "Skills", icon: "✦", enabled: false, hint: "Skills are not implemented yet." },
-        { id: "items", label: "Items", icon: "▣", enabled: false, hint: "Combat items are not implemented yet." },
-      ]
+    ? []
     : [
         { id: "travel", label: "Advance", icon: "➜", enabled: Boolean(state) && !busy && state?.route_offset !== routeMap?.length, run: () => void advanceTravel() },
         { id: "gather", label: "Gather wood", icon: "❖", enabled: Boolean(state?.discovered_locations.includes("old_timberwood")) && !busy, hint: "Gather wood at Old Timberwood.", run: () => void gatherWood() },
-        ...(state?.discovered_locations.includes("old_timberwood") && !combat
-          ? [{ id: "encounter", label: "Face goblin", icon: "⚔", enabled: !busy, hint: "Start the Timberwood encounter.", run: () => void beginCombat() }]
-          : []),
+        ...(state?.discovered_locations.includes("old_timberwood") && !combat ? [{ id: "encounter", label: "Face goblin", icon: "⚔", enabled: !busy, run: () => void beginCombat() }] : []),
         { id: "explore", label: "Explore", icon: "⌖", enabled: false, hint: "Exploration actions are coming with the next location." },
         { id: "craft", label: "Craft", icon: "◆", enabled: false, hint: "Crafting is not implemented yet." },
       ];
 
-  function submitCommand(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!command.trim()) return;
-    setCommandNotice("Conversation is not connected yet. Your message was not sent.");
-  }
-
-  function renderEmptyPanel(title: string, eyebrow: string, body: string) {
-    return (
-      <section className="panel-empty">
-        <p className="eyebrow">{eyebrow}</p>
-        <h2>{title}</h2>
-        <p className="muted">{body}</p>
-      </section>
-    );
-  }
-
-  function toggleModule(module: ModuleId) {
-    setExpandedModule((current) => current === module ? null : module);
-  }
-
-  function navigateTo(tab: TabId) {
-    if (tab === "journal") {
-      setJournalOpen((current) => !current);
-      return;
-    }
-    setJournalOpen(false);
-    setActiveTab(tab);
-  }
+  const knownWaypoints = routeMap?.waypoints.filter((waypoint) => waypoint.known) ?? [];
 
   return (
     <main className="shell">
       <div className="game-console">
-      <header className="masthead">
-        <div>
-          <p className="eyebrow">A small world, stubbornly alive</p>
-          <h1>Hearth <span>&amp;</span> Havoc</h1>
-        </div>
-        <div className="masthead-actions">
-          <div className="version">content {state?.content_version ?? "—"}</div>
-          <button className="reset-button" onClick={() => void resetProgress()} disabled={busy}>
-            Reset progress
-          </button>
-        </div>
-      </header>
+        <header className="masthead">
+          <div><p className="eyebrow">A small world, stubbornly alive</p><h1>Hearth <span>&amp;</span> Havoc</h1></div>
+          <div className="masthead-actions"><div className="version">content {state?.content_version ?? "—"}</div><button className="reset-button" onClick={() => void resetProgress()} disabled={busy}>Reset progress</button></div>
+        </header>
 
-      {error && <div className="notice error">{error}</div>}
+        {error && <div className="notice error">{error}</div>}
 
-      <section className="character-strip" aria-label="Character status">
-        <div className="character-identity"><span className="crest">♜</span><div><strong>Blacksmith</strong><small>Development save · turn {state?.route_offset ?? "—"}</small></div></div>
-        <div className="status-metric"><span>HP</span><strong>— / —</strong><small>not modeled</small></div>
-        <div className="status-metric"><span>Stamina</span><strong>—</strong><small>not modeled</small></div>
-        <div className="status-metric"><span>Wood</span><strong>{state?.resources.wood ?? 0}</strong><small>carried</small></div>
-        <div className="status-metric"><span>Turn</span><strong data-testid="adventure-turn">{state?.route_offset ?? "—"} / {routeMap?.length ?? 20}</strong><small>western road</small></div>
-        <div className="status-metric"><span>State</span><strong>v{state?.state_version ?? "—"}</strong><small>saved</small></div>
-      </section>
-
-      <section className={`console-content ${activeTab === "home" ? "home-console-surface" : ""}`}>
-      {activeTab === "home" && <section className="dashboard-grid">
-        <article className={`card console-module route-card ${expandedModule === "route" ? "expanded" : "collapsed"}`}>
-          <button className="module-heading" onClick={() => toggleModule("route")} aria-expanded={expandedModule === "route"}>
-            <div>
-              <p className="eyebrow">Known route</p>
-              <h3>{routeMap?.display_name ?? "Western Road"}</h3>
-            </div>
-            <span className="module-heading-meta"><span className="route-percent">{routeProgress}%</span><span className="module-chevron">{expandedModule === "route" ? "−" : "+"}</span></span>
-          </button>
-          <div className="module-summary"><span>{state?.route_offset ?? 0} / {routeMap?.length ?? 20} turns</span><span>{routeMap?.waypoints.find((waypoint) => waypoint.known)?.label ?? "No landmarks found"}</span></div>
-          {expandedModule === "route" && <div className="module-body">
-            <div className="progress-track" aria-label={`${routeProgress}% complete`}>
-              <div className="progress-fill" style={{ width: `${routeProgress}%` }} />
-            </div>
-            <div className="route-map">
-              <div className="route-line" />
-              <div className="route-stop start"><span>⌂</span><small>Shack</small></div>
-              {routeMap?.waypoints.map((waypoint, index) => (
-                <div className={`route-stop ${waypoint.known ? "known" : ""}`} key={waypoint.offset}>
-                  <span>{index === routeMap.waypoints.length - 1 ? "◆" : "♣"}</span>
-                  <small data-testid={`route-waypoint-${waypoint.offset}`}>{waypoint.label}</small>
-                </div>
-              ))}
-            </div>
-            <div className="travel-status" aria-live="polite">
-              {state?.route_offset === routeMap?.length
-                ? "The road is complete."
-                : autoTravel
-                  ? `Auto-travel resumes in ${countdown}s`
-                  : "Auto-travel paused"}
-            </div>
-          </div>}
-        </article>
-
-        {state?.discovered_locations.includes("old_timberwood") && (
-          <article className={`card console-module combat-card ${expandedModule === "encounter" ? "expanded" : "collapsed"}`}>
-            <button className="module-heading" onClick={() => toggleModule("encounter")} aria-expanded={expandedModule === "encounter"}>
-              <div>
-                <p className="eyebrow">Encounter</p>
-                <h3>Goblin in the timber</h3>
-              </div>
-              <span className="module-heading-meta">{combat && <span className={`combat-status ${combat.status}`}>{combat.status}</span>}<span className="module-chevron">{expandedModule === "encounter" ? "−" : "+"}</span></span>
-            </button>
-            <div className="module-summary"><span>{combat ? `${combat.player_hp} / ${combat.player_max_hp} HP` : "Unresolved"}</span><span>{combat?.status === "active" ? "Your move" : "Timberwood"}</span></div>
-            {expandedModule === "encounter" && <div className="module-body">
-              {!combat && (
-              <>
-                <p className="muted">Something small, green, and poorly mannered has noticed you.</p>
-              </>
-              )}
-              {combat && (
-              <>
-                <div className="combat-bars">
-                  <div><span>You</span><strong>{combat.player_hp} / {combat.player_max_hp}</strong><div className="health-track"><i style={{ width: `${(combat.player_hp / combat.player_max_hp) * 100}%` }} /></div></div>
-                  <div><span>Goblin</span><strong>{combat.enemy_hp} / {combat.enemy_max_hp}</strong><div className="health-track enemy"><i style={{ width: `${(combat.enemy_hp / combat.enemy_max_hp) * 100}%` }} /></div></div>
-                </div>
-                {combat.status !== "active" && <p className="muted">The encounter is resolved. The forest resumes pretending it saw nothing.</p>}
-              </>
-              )}
-            </div>}
-          </article>
-        )}
-
-        {state?.discovered_locations.includes("old_timberwood") && (
-          <article className={`card console-module resource-card ${expandedModule === "gather" ? "expanded" : "collapsed"}`}>
-            <button className="module-heading" onClick={() => toggleModule("gather")} aria-expanded={expandedModule === "gather"}>
-              <div>
-                <p className="eyebrow">Gathering</p>
-                <h3>Old Timberwood</h3>
-              </div>
-              <span className="module-heading-meta"><span className="resource-count">Wood · {state.resources.wood ?? 0}</span><span className="module-chevron">{expandedModule === "gather" ? "−" : "+"}</span></span>
-            </button>
-            <div className="module-summary"><span>Available</span><span>+3 wood per gathering action</span></div>
-            {expandedModule === "gather" && <div className="module-body"><p className="muted">The old trees are sturdy enough to become something useful.</p></div>}
-          </article>
-        )}
-
-        <article className={`card console-module journal-card ${expandedModule === "journal" ? "expanded" : "collapsed"}`}>
-          <button className="module-heading" onClick={() => toggleModule("journal")} aria-expanded={expandedModule === "journal"}>
-            <div>
-              <p className="eyebrow">Journal</p>
-              <h3>What has happened</h3>
-            </div>
-            <span className="module-heading-meta"><span className="module-count">{events.length} entries</span><span className="module-chevron">{expandedModule === "journal" ? "−" : "+"}</span></span>
-          </button>
-          <ol className="journal-list">
-            {events.length === 0 && <li className="muted">The page is quiet. Suspiciously quiet.</li>}
-            {events.slice(0, expandedModule === "journal" ? events.length : 2).map((event, index) => <li key={`${event}-${index}`} className={event.startsWith("SYSTEM") ? "console-system" : event.startsWith("NARRATIVE") ? "console-narrative-line" : ""}>{event}</li>)}
-          </ol>
-        </article>
-      </section>}
-
-      {activeTab === "journal" && renderEmptyPanel("The road's record", "Journal", "Discoveries and event history will collect here as the world grows.")}
-      {activeTab === "map" && renderEmptyPanel("Western Road", "World Map", "The discovered route remains visible on Home. A broader world map will arrive with the next region.")}
-      {activeTab === "character" && renderEmptyPanel("A craftsperson on the road", "Character", "Attributes, mastery, equipment, and progression are not modeled in this vertical slice yet.")}
-      {activeTab === "inventory" && renderEmptyPanel("Carried supplies", "Inventory", `Wood: ${state?.resources.wood ?? 0}. Item slots and equipment will be added with crafting.`)}
-
-      {activeTab === "home" && <>
-      <form className="command-bar" onSubmit={submitCommand}>
-        <button type="button" className="command-mode">▰ Talk <span>⌄</span></button>
-        <input value={command} onChange={(event) => { setCommand(event.target.value); setCommandNotice(null); }} placeholder="Type a message or command…" aria-label="Message or command" />
-        <button className="send-button" type="submit" disabled={!command.trim()}>Send</button>
-      </form>
-      {commandNotice && <p className="command-notice">{commandNotice}</p>}
-
-      <section className="action-panel" aria-label="Contextual actions">
-        <div className="section-heading"><div><p className="eyebrow">Available actions</p><h3>{combat?.status === "active" ? "Combat" : "Current context"}</h3></div><small>{combat?.status === "active" ? "Choose your move." : "The road waits."}</small></div>
-        <div className="action-grid">
-          {actions.map((action) => <button key={action.id} className={`action-button ${combat?.status === "active" ? "combat-action-button" : ""}`} disabled={!action.enabled} title={action.hint} onClick={action.run}>
-            <span className="action-icon">{action.icon}</span><span>{action.label}</span>
-          </button>)}
-        </div>
-      </section>
-      </>}
-      </section>
-
-      <nav className="bottom-navigation" aria-label="Game navigation">
-        {navigation.map((item) => <button key={item.id} className={`nav-button ${(item.id === "journal" ? journalOpen : activeTab === item.id) ? "active" : ""}`} onClick={() => navigateTo(item.id)} aria-current={(item.id === "journal" ? journalOpen : activeTab === item.id) ? "page" : undefined}>
-          <span className="nav-icon">{item.icon}</span><span>{item.label}</span>
-        </button>)}
-      </nav>
-      {journalOpen && <div className="journal-overlay" role="presentation">
-        <section className="journal-ledger" role="dialog" aria-labelledby="journal-title">
-          <div className="ledger-header">
-            <div><p className="eyebrow">Adventure ledger</p><h2 id="journal-title">Journal</h2></div>
-            <button className="ledger-close" onClick={() => setJournalOpen(false)} aria-label="Close journal">×</button>
-          </div>
-          <section className="ledger-section">
-            <div className="ledger-section-heading"><span>Open quests</span><small>0 active</small></div>
-            <p className="ledger-empty">No quests have been recorded yet. The road has not offered terms.</p>
-          </section>
-          <section className="ledger-section">
-            <div className="ledger-section-heading"><span>Quest tracker</span><small>Awaiting content</small></div>
-            <p className="ledger-empty">Quest tracking will activate in the next development sprint.</p>
-          </section>
+        <section className="character-strip" aria-label="Character status">
+          <div className="character-identity"><span className="crest">♜</span><div><strong>Blacksmith</strong><small>Development save · turn {state?.route_offset ?? "—"}</small></div></div>
+          <div className="status-metric"><span>HP</span><strong>— / —</strong><small>not modeled</small></div>
+          <div className="status-metric"><span>Stamina</span><strong>—</strong><small>not modeled</small></div>
+          <div className="status-metric"><span>Wood</span><strong>{state?.resources.wood ?? 0}</strong><small>carried</small></div>
+          <div className="status-metric"><span>Turn</span><strong data-testid="adventure-turn">{state?.route_offset ?? "—"} / {routeMap?.length ?? 20}</strong><small>western road</small></div>
+          <div className="status-metric"><span>State</span><strong>v{state?.state_version ?? "—"}</strong><small>saved</small></div>
         </section>
-      </div>}
+
+        <section className={`console-content ${activeTab === "home" ? "home-console-surface" : ""}`}>
+          {activeTab === "home" && <>
+            <header className="terminal-context"><div><p className="eyebrow">Home terminal · Western Road</p><h2>Adventure channel</h2><p className="muted">The world is listening. Type a command or choose an action below.</p></div><span className="terminal-state">{autoTravel ? `AUTO ${countdown}s` : "PAUSED"}</span></header>
+            <div className="terminal-window">
+              <div className="terminal-banner">HEARTH &amp; HAVOC // LIVE WORLD FEED</div>
+              <ol className="terminal-events" ref={terminalRef} onScroll={handleTerminalScroll} aria-live="polite">
+                {events.map((event, index) => <li className={`terminal-event ${eventClass(event)}`} key={`${event}-${index}`}><span className="terminal-caret">›</span><span>{event}</span></li>)}
+                {events.length === 0 && <li className="terminal-event system"><span className="terminal-caret">›</span><span>SYSTEM // Awaiting world state…</span></li>}
+              </ol>
+              {showJumpToLatest && <button className="jump-latest" onClick={jumpToLatest}>Jump to latest</button>}
+            </div>
+            <form className="command-bar" onSubmit={submitCommand}>
+              <button type="button" className="command-mode">▰ Talk <span>⌄</span></button>
+              <input value={command} onChange={(event) => { setCommand(event.target.value); setCommandNotice(null); }} placeholder="Type a message or command…" aria-label="Message or command" />
+              <button className="send-button" type="submit" disabled={!command.trim()}>Send</button>
+            </form>
+            {commandNotice && <p className="command-notice">{commandNotice}</p>}
+            <section className="action-panel gamepad" aria-label="Contextual actions">
+              <div className="section-heading"><div><p className="eyebrow">Gamepad</p><h3>Available commands</h3></div><small>{autoTravel ? "The road advances on its own." : "Choose your next move."}</small></div>
+              <div className="action-grid">{actions.map((action) => <button key={action.id} className="action-button" disabled={!action.enabled} title={action.hint} onClick={action.run}><span className="action-icon">{action.icon}</span><span>{action.label}</span></button>)}</div>
+            </section>
+          </>}
+
+          {activeTab === "map" && <section className="map-view"><div className="view-heading"><p className="eyebrow">World navigation</p><h2>Western Road</h2><p className="muted">Known locations and the current route. Undiscovered waypoint identities remain hidden.</p></div><div className="map-grid" aria-label="Western Road grid map"><div className="map-route-line" />{[...Array(20)].map((_, index) => <span className={`map-cell ${index % 5 === 0 ? "terrain" : ""}`} key={index} />)}<div className="map-node home-node"><span>⌂</span><small>Shack</small></div>{knownWaypoints.map((waypoint) => <div className={`map-node waypoint-${waypoint.location_id}`} key={waypoint.location_id ?? waypoint.offset} data-testid={`map-waypoint-${waypoint.offset}`} style={{ left: `${Math.min(82, 12 + waypoint.offset * 3.4)}%`, top: waypoint.location_id === "briarbrook" ? "25%" : "63%" }}><span>◆</span><small>{waypoint.label}</small></div>)}</div><div className="map-readout"><strong>Current position</strong><span>Western Road · turn {state?.route_offset ?? 0} / {routeMap?.length ?? 20}</span></div></section>}
+          {activeTab === "journal" && <section className="quest-journal"><div className="view-heading"><p className="eyebrow">Adventure ledger</p><h2>Quest Journal</h2><p className="muted">Track objectives, story threads, and contracts as the world begins to make demands.</p></div><div className="quest-layout"><aside className="quest-list"><div className="quest-list-heading">Active quests <small>0</small></div><p className="ledger-empty">No quests have been recorded yet.</p><div className="quest-list-heading">Completed <small>0</small></div><p className="ledger-empty">The ledger is waiting for its first story.</p></aside><section className="quest-details"><p className="eyebrow">Selected quest</p><h3>No quest selected</h3><p className="muted">Quest objectives, lore, and rewards will appear here when quest definitions arrive.</p></section></div></section>}
+          {activeTab === "character" && <section className="panel-empty"><p className="eyebrow">Character</p><h2>A craftsperson on the road</h2><p className="muted">Attributes, mastery, equipment, and progression are not modeled in this vertical slice yet.</p></section>}
+          {activeTab === "inventory" && <section className="panel-empty"><p className="eyebrow">Inventory</p><h2>Carried supplies</h2><p className="muted">Wood: {state?.resources.wood ?? 0}. Item slots and equipment will be added with crafting.</p></section>}
+        </section>
+
+        {encounterOpen && combat && <section className="encounter-overlay" role="dialog" aria-modal="false" aria-labelledby="encounter-title">
+          <div className="encounter-header"><div><p className="eyebrow">Temporary encounter</p><h2 id="encounter-title">Goblin in the timber</h2></div><span className={`combat-status ${combat.status}`}>{combat.status}</span></div>
+          <p className="muted">A goblin highwayman blocks the old road. The terminal waits for your move.</p>
+          <div className="combat-bars"><div><span>You</span><strong>{combat.player_hp} / {combat.player_max_hp}</strong><div className="health-track"><i style={{ width: `${(combat.player_hp / combat.player_max_hp) * 100}%` }} /></div></div><div><span>Goblin</span><strong>{combat.enemy_hp} / {combat.enemy_max_hp}</strong><div className="health-track enemy"><i style={{ width: `${(combat.enemy_hp / combat.enemy_max_hp) * 100}%` }} /></div></div></div>
+          {combat.status === "active" ? <div className="combat-actions">{["attack", "defend"].map((action) => <button className="action-button" key={action} onClick={() => void combatAction(action as "attack" | "defend")} disabled={busy || combat.turn !== "player"}>{action === "attack" ? "⚔ Attack" : "◇ Defend"}</button>)}</div> : <button className="secondary-button" onClick={() => setEncounterOpen(false)}>Return to terminal</button>}
+        </section>}
+
+        <nav className="bottom-navigation" aria-label="Game navigation">{navigation.map((item) => <button key={item.id} className={`nav-button ${activeTab === item.id ? "active" : ""}`} onClick={() => setActiveTab(item.id)} aria-current={activeTab === item.id ? "page" : undefined}><span className="nav-icon">{item.icon}</span><span>{item.label}</span></button>)}</nav>
       </div>
     </main>
   );
