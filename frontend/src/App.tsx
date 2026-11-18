@@ -51,6 +51,7 @@ type CombatActionResponse = {
 };
 
 type TabId = "journal" | "map" | "home" | "character" | "inventory";
+type ModuleId = "route" | "encounter" | "gather" | "journal";
 
 type ActionDefinition = {
   id: string;
@@ -102,6 +103,7 @@ export default function App() {
   const [countdown, setCountdown] = useState(AUTO_TRAVEL_DELAY_SECONDS);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("home");
+  const [expandedModule, setExpandedModule] = useState<ModuleId | null>("route");
   const [command, setCommand] = useState("");
   const [commandNotice, setCommandNotice] = useState<string | null>(null);
 
@@ -139,6 +141,10 @@ export default function App() {
   useEffect(() => {
     void loadSave();
   }, [loadSave]);
+
+  useEffect(() => {
+    if (combat?.status === "active") setExpandedModule("encounter");
+  }, [combat?.status]);
 
   const routeProgress = useMemo(() => {
     if (!state) return 0;
@@ -327,6 +333,10 @@ export default function App() {
     );
   }
 
+  function toggleModule(module: ModuleId) {
+    setExpandedModule((current) => current === module ? null : module);
+  }
+
   return (
     <main className="shell">
       <div className="game-console">
@@ -370,51 +380,56 @@ export default function App() {
       </section>}
 
       {activeTab === "home" && <section className="dashboard-grid">
-        <article className="card route-card">
-          <div className="card-heading">
+        <article className={`card console-module route-card ${expandedModule === "route" ? "expanded" : "collapsed"}`}>
+          <button className="module-heading" onClick={() => toggleModule("route")} aria-expanded={expandedModule === "route"}>
             <div>
               <p className="eyebrow">Known route</p>
               <h3>{routeMap?.display_name ?? "Western Road"}</h3>
             </div>
-            <span className="route-percent">{routeProgress}%</span>
-          </div>
-          <div className="progress-track" aria-label={`${routeProgress}% complete`}>
-            <div className="progress-fill" style={{ width: `${routeProgress}%` }} />
-          </div>
-          <div className="route-map">
-            <div className="route-line" />
-            <div className="route-stop start"><span>⌂</span><small>Shack</small></div>
-            {routeMap?.waypoints.map((waypoint, index) => (
-              <div className={`route-stop ${waypoint.known ? "known" : ""}`} key={waypoint.offset}>
-                <span>{index === routeMap.waypoints.length - 1 ? "◆" : "♣"}</span>
-                <small data-testid={`route-waypoint-${waypoint.offset}`}>{waypoint.label}</small>
-              </div>
-            ))}
-          </div>
-          <div className="travel-status" aria-live="polite">
-            {state?.route_offset === routeMap?.length
-              ? "The road is complete."
-              : autoTravel
-                ? `Auto-travel resumes in ${countdown}s`
-                : "Auto-travel paused"}
-          </div>
+            <span className="module-heading-meta"><span className="route-percent">{routeProgress}%</span><span className="module-chevron">{expandedModule === "route" ? "−" : "+"}</span></span>
+          </button>
+          <div className="module-summary"><span>{state?.route_offset ?? 0} / {routeMap?.length ?? 20} turns</span><span>{routeMap?.waypoints.find((waypoint) => waypoint.known)?.label ?? "No landmarks found"}</span></div>
+          {expandedModule === "route" && <div className="module-body">
+            <div className="progress-track" aria-label={`${routeProgress}% complete`}>
+              <div className="progress-fill" style={{ width: `${routeProgress}%` }} />
+            </div>
+            <div className="route-map">
+              <div className="route-line" />
+              <div className="route-stop start"><span>⌂</span><small>Shack</small></div>
+              {routeMap?.waypoints.map((waypoint, index) => (
+                <div className={`route-stop ${waypoint.known ? "known" : ""}`} key={waypoint.offset}>
+                  <span>{index === routeMap.waypoints.length - 1 ? "◆" : "♣"}</span>
+                  <small data-testid={`route-waypoint-${waypoint.offset}`}>{waypoint.label}</small>
+                </div>
+              ))}
+            </div>
+            <div className="travel-status" aria-live="polite">
+              {state?.route_offset === routeMap?.length
+                ? "The road is complete."
+                : autoTravel
+                  ? `Auto-travel resumes in ${countdown}s`
+                  : "Auto-travel paused"}
+            </div>
+          </div>}
         </article>
 
         {state?.discovered_locations.includes("old_timberwood") && (
-          <article className="card combat-card">
-            <div className="card-heading">
+          <article className={`card console-module combat-card ${expandedModule === "encounter" ? "expanded" : "collapsed"}`}>
+            <button className="module-heading" onClick={() => toggleModule("encounter")} aria-expanded={expandedModule === "encounter"}>
               <div>
                 <p className="eyebrow">Encounter</p>
                 <h3>Goblin in the timber</h3>
               </div>
-              {combat && <span className={`combat-status ${combat.status}`}>{combat.status}</span>}
-            </div>
-            {!combat && (
+              <span className="module-heading-meta">{combat && <span className={`combat-status ${combat.status}`}>{combat.status}</span>}<span className="module-chevron">{expandedModule === "encounter" ? "−" : "+"}</span></span>
+            </button>
+            <div className="module-summary"><span>{combat ? `${combat.player_hp} / ${combat.player_max_hp} HP` : "Unresolved"}</span><span>{combat?.status === "active" ? "Your move" : "Timberwood"}</span></div>
+            {expandedModule === "encounter" && <div className="module-body">
+              {!combat && (
               <>
                 <p className="muted">Something small, green, and poorly mannered has noticed you.</p>
               </>
-            )}
-            {combat && (
+              )}
+              {combat && (
               <>
                 <div className="combat-bars">
                   <div><span>You</span><strong>{combat.player_hp} / {combat.player_max_hp}</strong><div className="health-track"><i style={{ width: `${(combat.player_hp / combat.player_max_hp) * 100}%` }} /></div></div>
@@ -422,33 +437,36 @@ export default function App() {
                 </div>
                 {combat.status !== "active" && <p className="muted">The encounter is resolved. The forest resumes pretending it saw nothing.</p>}
               </>
-            )}
+              )}
+            </div>}
           </article>
         )}
 
         {state?.discovered_locations.includes("old_timberwood") && (
-          <article className="card resource-card">
-            <div className="card-heading">
+          <article className={`card console-module resource-card ${expandedModule === "gather" ? "expanded" : "collapsed"}`}>
+            <button className="module-heading" onClick={() => toggleModule("gather")} aria-expanded={expandedModule === "gather"}>
               <div>
                 <p className="eyebrow">Gathering</p>
                 <h3>Old Timberwood</h3>
               </div>
-              <span className="resource-count">Wood · {state.resources.wood ?? 0}</span>
-            </div>
-            <p className="muted">The old trees are sturdy enough to become something useful.</p>
+              <span className="module-heading-meta"><span className="resource-count">Wood · {state.resources.wood ?? 0}</span><span className="module-chevron">{expandedModule === "gather" ? "−" : "+"}</span></span>
+            </button>
+            <div className="module-summary"><span>Available</span><span>+3 wood per gathering action</span></div>
+            {expandedModule === "gather" && <div className="module-body"><p className="muted">The old trees are sturdy enough to become something useful.</p></div>}
           </article>
         )}
 
-        <article className="card journal-card">
-          <div className="card-heading">
+        <article className={`card console-module journal-card ${expandedModule === "journal" ? "expanded" : "collapsed"}`}>
+          <button className="module-heading" onClick={() => toggleModule("journal")} aria-expanded={expandedModule === "journal"}>
             <div>
               <p className="eyebrow">Journal</p>
               <h3>What has happened</h3>
             </div>
-          </div>
+            <span className="module-heading-meta"><span className="module-count">{events.length} entries</span><span className="module-chevron">{expandedModule === "journal" ? "−" : "+"}</span></span>
+          </button>
           <ol className="journal-list">
             {events.length === 0 && <li className="muted">The page is quiet. Suspiciously quiet.</li>}
-            {events.map((event, index) => <li key={`${event}-${index}`}>{event}</li>)}
+            {events.slice(0, expandedModule === "journal" ? events.length : 2).map((event, index) => <li key={`${event}-${index}`}>{event}</li>)}
           </ol>
         </article>
       </section>}
