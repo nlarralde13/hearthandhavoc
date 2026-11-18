@@ -10,7 +10,7 @@ test("player can travel, discover Timberwood, and reload progress", async ({ pag
   await page.getByRole("button", { name: "Pause auto-travel" }).click();
 
   for (let turn = 1; turn <= 6; turn += 1) {
-    await page.getByRole("button", { name: "Advance one turn" }).click();
+    await page.getByRole("button", { name: "Advance" }).click();
     await expect(page.getByTestId("adventure-turn")).toHaveText(`${turn} / 20`);
   }
 

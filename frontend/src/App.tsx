@@ -303,7 +303,10 @@ export default function App() {
       ]
     : [
         { id: "travel", label: "Advance", icon: "➜", enabled: Boolean(state) && !busy && state?.route_offset !== routeMap?.length, run: () => void advanceTravel() },
-        { id: "gather", label: "Gather", icon: "❖", enabled: Boolean(state?.discovered_locations.includes("old_timberwood")) && !busy, hint: "Gather wood at Old Timberwood.", run: () => void gatherWood() },
+        { id: "gather", label: "Gather wood", icon: "❖", enabled: Boolean(state?.discovered_locations.includes("old_timberwood")) && !busy, hint: "Gather wood at Old Timberwood.", run: () => void gatherWood() },
+        ...(state?.discovered_locations.includes("old_timberwood") && !combat
+          ? [{ id: "encounter", label: "Face goblin", icon: "⚔", enabled: !busy, hint: "Start the Timberwood encounter.", run: () => void beginCombat() }]
+          : []),
         { id: "explore", label: "Explore", icon: "⌖", enabled: false, hint: "Exploration actions are coming with the next location." },
         { id: "craft", label: "Craft", icon: "◆", enabled: false, hint: "Crafting is not implemented yet." },
       ];
@@ -350,6 +353,7 @@ export default function App() {
         <div className="status-metric"><span>State</span><strong>v{state?.state_version ?? "—"}</strong><small>saved</small></div>
       </section>
 
+      <section className={`console-content ${activeTab === "home" ? "home-console-surface" : ""}`}>
       {activeTab === "home" && <section className="hero-panel">
         <div>
           <p className="eyebrow">Homestead · {routeMap?.display_name ?? "Western Road"}</p>
@@ -387,22 +391,12 @@ export default function App() {
               </div>
             ))}
           </div>
-          <div className="travel-controls">
-            <div className="travel-status" aria-live="polite">
-              {state?.route_offset === routeMap?.length
-                ? "The road is complete."
-                : autoTravel
-                  ? `Auto-travel resumes in ${countdown}s`
-                  : "Auto-travel paused"}
-            </div>
-            <button className="primary-button" onClick={() => void advanceTravel()} disabled={!state || busy || state.route_offset >= (routeMap?.length ?? 20)}>
-              {busy ? "Consulting the map…" : state?.route_offset === routeMap?.length ? "Road complete" : "Advance one turn"}
-            </button>
-            {state && state.route_offset < (routeMap?.length ?? 20) && (
-              <button className="secondary-button travel-toggle" onClick={() => setAutoTravel((current) => !current)} disabled={busy}>
-                {autoTravel ? "Pause auto-travel" : "Resume auto-travel"}
-              </button>
-            )}
+          <div className="travel-status" aria-live="polite">
+            {state?.route_offset === routeMap?.length
+              ? "The road is complete."
+              : autoTravel
+                ? `Auto-travel resumes in ${countdown}s`
+                : "Auto-travel paused"}
           </div>
         </article>
 
@@ -418,9 +412,6 @@ export default function App() {
             {!combat && (
               <>
                 <p className="muted">Something small, green, and poorly mannered has noticed you.</p>
-                <button className="primary-button" onClick={() => void beginCombat()} disabled={busy}>
-                  Face the goblin
-                </button>
               </>
             )}
             {combat && (
@@ -429,12 +420,7 @@ export default function App() {
                   <div><span>You</span><strong>{combat.player_hp} / {combat.player_max_hp}</strong><div className="health-track"><i style={{ width: `${(combat.player_hp / combat.player_max_hp) * 100}%` }} /></div></div>
                   <div><span>Goblin</span><strong>{combat.enemy_hp} / {combat.enemy_max_hp}</strong><div className="health-track enemy"><i style={{ width: `${(combat.enemy_hp / combat.enemy_max_hp) * 100}%` }} /></div></div>
                 </div>
-                {combat.status === "active" ? (
-                  <div className="combat-actions">
-                    <button className="primary-button" onClick={() => void combatAction("attack")} disabled={busy || combat.turn !== "player"}>Attack</button>
-                    <button className="secondary-button" onClick={() => void combatAction("defend")} disabled={busy || combat.turn !== "player"}>Defend</button>
-                  </div>
-                ) : <p className="muted">The encounter is resolved. The forest resumes pretending it saw nothing.</p>}
+                {combat.status !== "active" && <p className="muted">The encounter is resolved. The forest resumes pretending it saw nothing.</p>}
               </>
             )}
           </article>
@@ -450,9 +436,6 @@ export default function App() {
               <span className="resource-count">Wood · {state.resources.wood ?? 0}</span>
             </div>
             <p className="muted">The old trees are sturdy enough to become something useful.</p>
-            <button className="primary-button" onClick={() => void gatherWood()} disabled={busy}>
-              Gather wood
-            </button>
           </article>
         )}
 
@@ -475,6 +458,7 @@ export default function App() {
       {activeTab === "character" && renderEmptyPanel("A craftsperson on the road", "Character", "Attributes, mastery, equipment, and progression are not modeled in this vertical slice yet.")}
       {activeTab === "inventory" && renderEmptyPanel("Carried supplies", "Inventory", `Wood: ${state?.resources.wood ?? 0}. Item slots and equipment will be added with crafting.`)}
 
+      {activeTab === "home" && <>
       <form className="command-bar" onSubmit={submitCommand}>
         <button type="button" className="command-mode">▰ Talk <span>⌄</span></button>
         <input value={command} onChange={(event) => { setCommand(event.target.value); setCommandNotice(null); }} placeholder="Type a message or command…" aria-label="Message or command" />
@@ -489,6 +473,8 @@ export default function App() {
             <span className="action-icon">{action.icon}</span><span>{action.label}</span>
           </button>)}
         </div>
+      </section>
+      </>}
       </section>
 
       <nav className="bottom-navigation" aria-label="Game navigation">
