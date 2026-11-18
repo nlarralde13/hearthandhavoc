@@ -4,6 +4,7 @@ import jwt
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import InvalidTokenError
+from jwt.exceptions import PyJWKClientError
 
 from app.settings import get_settings
 
@@ -33,7 +34,7 @@ def _oidc_actor(token: str) -> str:
             issuer=settings.oidc_issuer_url,
             options={"require": ["sub", "iss", "aud", "exp"]},
         )
-    except (InvalidTokenError, OSError, ValueError):
+    except (InvalidTokenError, OSError, PyJWKClientError, ValueError):
         raise _unauthorized() from None
 
     subject = claims.get("sub")
