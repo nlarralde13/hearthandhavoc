@@ -71,6 +71,19 @@ The browser talks to the frontend container, which proxies `/api` to the API
 container. The SQLite database lives in the Compose-managed `hearth_data`
 volume for this development deployment.
 
+From a clean, committed checkout, deploy the current development snapshot to
+VM108 with:
+
+```bash
+./scripts/deploy-webdev.sh
+```
+
+The helper streams tracked files over SSH, rebuilds only the
+`hearth-and-havoc-dev` Compose project, and verifies the API health endpoint.
+It does not require GitHub credentials on webdev and does not modify the
+template stack or the game-data volume. Override `WEBDEV_HOST`, `WEBDEV_USER`,
+or `WEBDEV_PROJECT` when using a different development target.
+
 The development frontend uses the temporary `X-Dev-User-ID` header in local
 development. Shared and production environments require a validated OIDC
 bearer token. Secrets belong in an untracked `.env` file or an approved runtime
