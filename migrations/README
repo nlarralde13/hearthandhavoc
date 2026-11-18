@@ -1,0 +1,3 @@
+Alembic migrations for Hearth & Havoc.
+
+Run `alembic upgrade head` from the repository root before starting the API.

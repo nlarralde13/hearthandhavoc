@@ -36,6 +36,13 @@ Every state-changing command includes:
 Commands execute in one database transaction. A repeated action ID returns its
 stored receipt. A stale state version returns a conflict requiring refresh.
 
+## Canonical content
+
+Routes and their waypoints live in versioned `game_data/` records and are
+validated when loaded. Save-scoped map responses filter undiscovered location
+IDs and names before returning data to the browser. The client is therefore a
+presentation of discovered content, not a source of hidden map truth.
+
 Each save stores a private root seed and content/schema version. The root seed
 is never sent to the client. Random results must be reproducible for debugging
 and safe retry behavior.
