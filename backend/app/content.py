@@ -12,16 +12,15 @@ class ContentError(ValueError):
     pass
 
 
-@lru_cache
-def load_route_record(route_id: str) -> dict[str, Any]:
-    path = CONTENT_ROOT / "routes" / f"{route_id}.json"
-    try:
-        record = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError) as exc:
-        raise ContentError(f"route content is unavailable: {route_id}") from exc
-
+def validate_route_record(record: Any, route_id: str) -> dict[str, Any]:
+    if not isinstance(record, dict):
+        raise ContentError(f"route content is not an object: {route_id}")
     if record.get("route_id") != route_id:
         raise ContentError(f"route content ID does not match filename: {route_id}")
+    if not isinstance(record.get("content_version"), str) or not record["content_version"]:
+        raise ContentError(f"route content version is invalid: {route_id}")
+    if not isinstance(record.get("display_name"), str) or not record["display_name"]:
+        raise ContentError(f"route display name is invalid: {route_id}")
     if not isinstance(record.get("length"), int) or record["length"] <= 0:
         raise ContentError(f"route length is invalid: {route_id}")
     waypoints = record.get("waypoints")
@@ -51,6 +50,33 @@ def load_route_record(route_id: str) -> dict[str, Any]:
         offsets.add(offset)
         location_ids.add(location_id)
     return record
+
+
+@lru_cache
+def load_route_record(route_id: str) -> dict[str, Any]:
+    path = CONTENT_ROOT / "routes" / f"{route_id}.json"
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        raise ContentError(f"route content is unavailable: {route_id}") from exc
+
+    return validate_route_record(record, route_id)
+
+
+def validate_all_content(content_root: Path = CONTENT_ROOT) -> list[str]:
+    route_paths = sorted((content_root / "routes").glob("*.json"))
+    if not route_paths:
+        raise ContentError("no route content found")
+    route_ids: list[str] = []
+    for path in route_paths:
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ContentError(f"cannot read route content: {path.name}") from exc
+        route_id = path.stem
+        validate_route_record(record, route_id)
+        route_ids.append(route_id)
+    return route_ids
 
 
 @lru_cache

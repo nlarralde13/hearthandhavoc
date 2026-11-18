@@ -52,6 +52,12 @@ Run database migrations before starting the API:
 .venv/bin/alembic upgrade head
 ```
 
+Validate canonical game content before starting work:
+
+```bash
+.venv/bin/python -m app.validate_content
+```
+
 The development frontend uses the temporary `X-Dev-User-ID` header in local
 development. Shared and production environments require a validated OIDC
 bearer token. Secrets belong in an untracked `.env` file or an approved runtime

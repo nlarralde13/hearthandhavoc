@@ -1,8 +1,11 @@
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from app.auth import actor_id
+from app.content import validate_all_content
 from app.db import get_db
 from app.schemas import (
     ActionRequest,
@@ -21,7 +24,14 @@ from app.services import (
     serialize_state,
 )
 
-app = FastAPI(title="Hearth & Havoc API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    validate_all_content()
+    yield
+
+
+app = FastAPI(title="Hearth & Havoc API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
