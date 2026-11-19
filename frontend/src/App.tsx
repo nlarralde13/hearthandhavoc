@@ -8,6 +8,11 @@ type SaveState = {
   attributes: Record<string, number>;
   equipment: string[];
   homestead: HomesteadState;
+  prologue: {
+    stranger_met: boolean;
+    quest_status: "inactive" | "offered" | "active" | "completed";
+    adventure_started: boolean;
+  };
   state_version: number;
   content_version: string;
   route_id: string;
@@ -111,6 +116,16 @@ function eventClass(message: string): string {
   return "normal";
 }
 
+function formatGameEvent(event: { type: string; location_id?: string; offset?: number; quest_id?: string }, turn: number): string {
+  if (event.type === "stranger.appears") return "NARRATIVE // A mysterious stranger recognizes your family name.";
+  if (event.type === "quest.offered") return "QUEST // A Father's Shadow is waiting for your answer.";
+  if (event.type === "quest.accepted") return "QUEST // Accepted: A Father's Shadow. Briarbrook holds the next lead.";
+  if (event.type === "adventure.started") return "SYSTEM // WESTERN ROAD GUIDANCE ACTIVE · DESTINATION BRIARBROOK";
+  if (event.type === "location.discovered") return `[Turn ${event.offset ?? turn}] Discovered: ${event.location_id}.`;
+  if (event.type === "travel.advanced") return `[Turn ${event.offset ?? turn}] You continue west along the old road.`;
+  return `[Turn ${turn}] ${event.type.replace(/\./g, " ")}.`;
+}
+
 function HomesteadFloorPlan({ homestead }: { homestead: HomesteadState }) {
   const doorState = homestead.front_door === "repaired" ? "Repaired" : "Broken";
   return (
@@ -139,7 +154,7 @@ export default function App() {
   const [combat, setCombat] = useState<CombatState | null>(null);
   const [events, setEvents] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [autoTravel, setAutoTravel] = useState(true);
+  const [autoTravel, setAutoTravel] = useState(false);
   const [countdown, setCountdown] = useState(AUTO_TRAVEL_DELAY_SECONDS);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("home");
@@ -166,6 +181,7 @@ export default function App() {
       const loaded = await request<SaveState>(`/api/v1/saves/${saveId}/state`);
       setState(loaded);
       setNeedsCreation(false);
+      setAutoTravel(loaded.prologue.adventure_started && loaded.route_offset < 20);
       setRouteMap(await request<RouteMap>(`/api/v1/saves/${loaded.save_id}/map`));
       setEvents([
         `SYSTEM // LINK RESTORED · SAVE ${loaded.save_id.slice(0, 8).toUpperCase()} RESUMED`,
@@ -210,6 +226,7 @@ export default function App() {
       setEvents([
         `SYSTEM // NEW ADVENTURE INITIALIZED · ${created.character_name.toUpperCase()} ONLINE`,
         "SYSTEM // HOMESTEAD ONLINE · WESTERN ROAD AVAILABLE",
+        "NARRATIVE // The King's letter granted you a battered homestead and a name worth carrying forward.",
         "NARRATIVE // The damaged shack is behind you. The road west waits beyond the gate.",
       ]);
     } catch (requestError) {
@@ -236,7 +253,7 @@ export default function App() {
   }, [routeMap, state]);
 
   const advanceTravel = useCallback(async () => {
-    if (!state || busy || state.route_offset >= (routeMap?.length ?? 20)) return;
+    if (!state || busy || !state.prologue.adventure_started || state.route_offset >= (routeMap?.length ?? 20)) return;
     setBusy(true);
     setError(null);
     try {
@@ -248,15 +265,32 @@ export default function App() {
       setRouteMap(await request<RouteMap>(`/api/v1/saves/${response.state.save_id}/map`));
       const foundSomething = response.events.some((event) => event.type !== "travel.advanced");
       if (foundSomething || response.state.route_offset >= (routeMap?.length ?? 20)) setAutoTravel(false);
-      appendEvents(response.events.map((event) => event.type === "location.discovered"
-        ? `[Turn ${event.offset}] Discovered: ${event.location_id}.`
-        : `[Turn ${event.offset}] You continue west along the old road.`));
+      appendEvents(response.events.map((event) => formatGameEvent(event, response.state.route_offset)));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to advance travel.");
     } finally {
       setBusy(false);
     }
   }, [appendEvents, busy, routeMap?.length, state]);
+
+  async function runPrologueAction(action: "homestead.explore" | "quest.accept" | "adventure.start") {
+    if (!state || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await request<ActionResponse>(`/api/v1/saves/${state.save_id}/actions`, {
+        method: "POST",
+        body: JSON.stringify({ action_id: actionId(), action, expected_state_version: state.state_version, payload: {} }),
+      });
+      setState(response.state);
+      appendEvents(response.events.map((event) => formatGameEvent(event, response.state.route_offset)));
+      if (action === "adventure.start") setAutoTravel(true);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to resolve prologue action.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function gatherWood() {
     if (!state || busy || !state.discovered_locations.includes("old_timberwood")) return;
@@ -382,10 +416,12 @@ export default function App() {
   const actions: ActionDefinition[] = combat?.status === "active"
     ? []
     : [
-        { id: "travel", label: "Advance", icon: "➜", enabled: Boolean(state) && !busy && state?.route_offset !== routeMap?.length, run: () => void advanceTravel() },
+        ...(!state?.prologue.stranger_met ? [{ id: "explore", label: "Explore Grounds", icon: "⌖", enabled: Boolean(state) && !busy, run: () => void runPrologueAction("homestead.explore") }] : []),
+        ...(state?.prologue.quest_status === "offered" ? [{ id: "accept", label: "Accept Quest", icon: "✦", enabled: !busy, run: () => void runPrologueAction("quest.accept") }] : []),
+        ...(state?.prologue.quest_status === "active" && !state.prologue.adventure_started ? [{ id: "adventure", label: "Head Out on Adventure", icon: "➜", enabled: !busy, run: () => void runPrologueAction("adventure.start") }] : []),
+        ...(state?.prologue.adventure_started ? [{ id: "travel", label: "Advance", icon: "➜", enabled: Boolean(state) && !busy && state?.route_offset !== routeMap?.length, run: () => void advanceTravel() }] : []),
         { id: "gather", label: "Gather wood", icon: "❖", enabled: Boolean(state?.discovered_locations.includes("old_timberwood")) && !busy, hint: "Gather wood at Old Timberwood.", run: () => void gatherWood() },
         ...(state?.discovered_locations.includes("old_timberwood") && !combat ? [{ id: "encounter", label: "Face goblin", icon: "⚔", enabled: !busy, run: () => void beginCombat() }] : []),
-        { id: "explore", label: "Explore", icon: "⌖", enabled: false, hint: "Exploration actions are coming with the next location." },
         { id: "craft", label: "Craft", icon: "◆", enabled: false, hint: "Crafting is not implemented yet." },
       ];
 
@@ -458,7 +494,7 @@ export default function App() {
           </>}
 
           {activeTab === "map" && <section className="map-view"><div className="view-heading"><p className="context-label">World navigation</p><h2>Western Road</h2><p className="muted">Known locations and the current route. Undiscovered waypoint identities remain hidden.</p></div><div className="map-grid" aria-label="Western Road grid map"><div className="map-route-line" />{[...Array(20)].map((_, index) => <span className={`map-cell ${index % 5 === 0 ? "terrain" : ""}`} key={index} />)}<div className="map-node home-node"><span>⌂</span><small>Shack</small></div>{knownWaypoints.map((waypoint) => <div className={`map-node waypoint-${waypoint.location_id}`} key={waypoint.location_id ?? waypoint.offset} data-testid={`map-waypoint-${waypoint.offset}`} style={{ left: `${Math.min(82, 12 + waypoint.offset * 3.4)}%`, top: waypoint.location_id === "briarbrook" ? "25%" : "63%" }}><span>◆</span><small>{waypoint.label}</small></div>)}</div><div className="map-readout"><strong>Current position</strong><span>Western Road · turn {state?.route_offset ?? 0} / {routeMap?.length ?? 20}</span></div></section>}
-          {activeTab === "journal" && <section className="quest-journal"><div className="view-heading"><p className="context-label">Adventure ledger</p><h2>Quest Journal</h2><p className="muted">Track objectives, story threads, and contracts as the world begins to make demands.</p></div><div className="quest-layout"><aside className="quest-list"><div className="quest-list-heading">Active quests <small>0</small></div><p className="ledger-empty">No quests have been recorded yet.</p><div className="quest-list-heading">Completed <small>0</small></div><p className="ledger-empty">The ledger is waiting for its first story.</p></aside><section className="quest-details"><p className="context-label">Selected quest</p><h3>No quest selected</h3><p className="muted">Quest objectives, lore, and rewards will appear here when quest definitions arrive.</p></section></div></section>}
+          {activeTab === "journal" && <section className="quest-journal"><div className="view-heading"><p className="context-label">Adventure ledger</p><h2>Quest Journal</h2><p className="muted">Track objectives, story threads, and contracts as the world begins to make demands.</p></div><div className="quest-layout"><aside className="quest-list"><div className="quest-list-heading">Active quests <small>{state?.prologue.quest_status === "active" ? 1 : 0}</small></div>{state?.prologue.quest_status === "active" ? <button className="quest-entry" type="button">A Father's Shadow</button> : <p className="ledger-empty">No quests have been recorded yet.</p>}<div className="quest-list-heading">Completed <small>0</small></div><p className="ledger-empty">The ledger is waiting for its first completed story.</p></aside><section className="quest-details"><p className="context-label">Selected quest</p>{state?.prologue.quest_status === "active" ? <><h3>A Father's Shadow</h3><p className="muted">A stranger claims the King's account of your father's service is incomplete. Travel to Briarbrook and find someone who remembers him.</p><p className="quest-objective">{state.prologue.adventure_started ? "▣ Travel to Briarbrook — adventure underway" : "□ Accept the guided adventure to Briarbrook"}</p></> : <><h3>No quest selected</h3><p className="muted">Quest objectives, lore, and rewards will appear here when quest definitions arrive.</p></>}</section></div></section>}
           {activeTab === "character" && <section className="panel-empty"><p className="context-label">Character</p><h2>A craftsperson on the road</h2><p className="muted">Attributes, mastery, equipment, and progression are not modeled in this vertical slice yet.</p></section>}
           {activeTab === "inventory" && <section className="panel-empty"><p className="context-label">Inventory</p><h2>Carried supplies</h2><p className="muted">Wood: {state?.resources.wood ?? 0}. Item slots and equipment will be added with crafting.</p></section>}
         </section>

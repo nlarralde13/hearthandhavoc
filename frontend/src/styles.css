@@ -298,6 +298,8 @@ body { overflow: hidden; }
 .quest-list .ledger-empty { margin: 12px 0 24px; }
 .quest-details { padding: 24px; }
 .quest-details h3 { margin-bottom: 10px; font-family: Georgia, serif; }
+.quest-entry { display: block; width: 100%; margin: 12px 0 24px; border: 1px solid #c4a46a; border-radius: 0; background: #302d23; color: #e5ddc9; padding: 10px; text-align: left; cursor: pointer; }
+.quest-objective { border-top: 1px solid #4e4a3c; color: #c4a46a; padding-top: 12px; font-size: .82rem; }
 
 /* M1 character creation and the first persistent homestead scene. */
 .creation-console { overflow: auto; }

@@ -35,6 +35,13 @@ class Save(Base):
             '"upgrades": {"front_door": "broken"}}], "front_door": "broken"}'
         ),
     )
+    prologue_state: Mapped[str] = mapped_column(
+        Text,
+        default=(
+            '{"stranger_met": false, "quest_status": "inactive", '
+            '"adventure_started": false}'
+        ),
+    )
     state_version: Mapped[int] = mapped_column(Integer, default=1)
     root_seed: Mapped[str] = mapped_column(String(64))
     content_version: Mapped[str] = mapped_column(String(32), default="0.1.0")

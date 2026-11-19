@@ -5,6 +5,19 @@ from app.services import StateConflict, create_save, get_save, perform_action
 from fastapi.testclient import TestClient
 
 
+def start_adventure(client: TestClient, headers: dict[str, str], save_id: str) -> int:
+    version = 1
+    for index, action in enumerate(("homestead.explore", "quest.accept", "adventure.start"), 1):
+        response = client.post(
+            f"/api/v1/saves/{save_id}/actions",
+            headers=headers,
+            json={"action_id": f"m2-setup-{index}", "action": action, "expected_state_version": version, "payload": {}},
+        )
+        assert response.status_code == 200
+        version = response.json()["state_version"]
+    return version
+
+
 def setup_function() -> None:
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
@@ -26,18 +39,19 @@ def test_create_load_and_replay_travel() -> None:
         assert created["attributes"] == {"agility": 8, "endurance": 10, "intellect": 8, "might": 14}
         assert created["equipment"] == ["Forge Hammer", "Nailed Scrap Board", "Blacksmith's Apron"]
         assert created["homestead"]["front_door"] == "broken"
+        start_adventure(client, headers, created["save_id"])
 
         command = {
             "action_id": "travel-1",
             "action": "travel.advance",
-            "expected_state_version": 1,
+            "expected_state_version": 4,
             "payload": {},
         }
         first = client.post(
             f"/api/v1/saves/{created['save_id']}/actions", headers=headers, json=command
         )
         assert first.status_code == 200
-        assert first.json()["state_version"] == 2
+        assert first.json()["state_version"] == 5
         assert first.json()["state"]["route_offset"] == 1
 
         replay = client.post(
@@ -45,7 +59,7 @@ def test_create_load_and_replay_travel() -> None:
         )
         assert replay.status_code == 200
         assert replay.json()["replayed"] is True
-        assert replay.json()["state_version"] == 2
+        assert replay.json()["state_version"] == 5
 
         stale = client.post(
             f"/api/v1/saves/{created['save_id']}/actions",
@@ -74,6 +88,52 @@ def test_character_creation_persists_name_and_rejects_unplayable_archetype() -> 
         assert disabled.status_code == 422
 
 
+def test_m2_prologue_exploration_quest_and_adventure_are_idempotent() -> None:
+    with TestClient(app) as client:
+        headers = {"X-Dev-User-ID": "m2-user"}
+        created = client.post(
+            "/api/v1/saves", headers=headers, json={"character_name": "Mara"}
+        ).json()
+        url = f"/api/v1/saves/{created['save_id']}/actions"
+
+        def command(action_id: str, action: str, version: int) -> dict:
+            return {
+                "action_id": action_id,
+                "action": action,
+                "expected_state_version": version,
+                "payload": {},
+            }
+
+        explore = client.post(url, headers=headers, json=command("explore-1", "homestead.explore", 1))
+        assert explore.status_code == 200
+        assert explore.json()["state"]["prologue"] == {
+            "stranger_met": True,
+            "quest_status": "offered",
+            "adventure_started": False,
+        }
+        assert [event["type"] for event in explore.json()["events"]] == [
+            "stranger.appears",
+            "quest.offered",
+        ]
+
+        replay = client.post(url, headers=headers, json=command("explore-1", "homestead.explore", 1))
+        assert replay.status_code == 200
+        assert replay.json()["replayed"] is True
+
+        accept = client.post(
+            url, headers=headers, json=command("accept-1", "quest.accept", explore.json()["state_version"])
+        )
+        assert accept.status_code == 200
+        started = client.post(
+            url,
+            headers=headers,
+            json=command("start-1", "adventure.start", accept.json()["state_version"]),
+        )
+        assert started.status_code == 200
+        assert started.json()["state"]["prologue"]["adventure_started"] is True
+        assert started.json()["state"]["route_offset"] == 0
+
+
 def test_saves_are_owned_by_the_authenticated_actor() -> None:
     with TestClient(app) as client:
         created = client.post(
@@ -92,6 +152,7 @@ def test_map_hides_undiscovered_waypoint_identity() -> None:
     with TestClient(app) as client:
         headers = {"X-Dev-User-ID": "map-user"}
         created = client.post("/api/v1/saves", headers=headers, json={}).json()
+        start_adventure(client, headers, created["save_id"])
 
         response = client.get(f"/api/v1/saves/{created['save_id']}/map", headers=headers)
 
@@ -108,7 +169,7 @@ def test_map_hides_undiscovered_waypoint_identity() -> None:
             action = {
                 "action_id": f"map-travel-{turn}",
                 "action": "travel.advance",
-                "expected_state_version": turn,
+                "expected_state_version": turn + 3,
                 "payload": {},
             }
             assert (
@@ -133,6 +194,7 @@ def test_gathering_requires_discovery_and_is_idempotent() -> None:
     with TestClient(app) as client:
         headers = {"X-Dev-User-ID": "gather-user"}
         created = client.post("/api/v1/saves", headers=headers, json={}).json()
+        start_adventure(client, headers, created["save_id"])
         url = f"/api/v1/saves/{created['save_id']}/actions"
 
         blocked = client.post(
@@ -141,7 +203,7 @@ def test_gathering_requires_discovery_and_is_idempotent() -> None:
             json={
                 "action_id": "gather-before-discovery",
                 "action": "gather.wood",
-                "expected_state_version": 1,
+                "expected_state_version": 4,
                 "payload": {"location_id": "old_timberwood"},
             },
         )
@@ -155,7 +217,7 @@ def test_gathering_requires_discovery_and_is_idempotent() -> None:
                 json={
                     "action_id": f"gather-travel-{turn}",
                     "action": "travel.advance",
-                    "expected_state_version": turn,
+                    "expected_state_version": turn + 3,
                     "payload": {},
                 },
             ).json()["state"]
@@ -182,10 +244,22 @@ def test_stale_loaded_session_cannot_overwrite_a_newer_action() -> None:
     try:
         created = create_save(first_session, "concurrency-user", "blacksmith")
         get_save(second_session, "concurrency-user", created.save_id)
+        for index, action in enumerate(("homestead.explore", "quest.accept", "adventure.start"), 1):
+            perform_action(
+                first_session,
+                "concurrency-user",
+                created.save_id,
+                ActionRequest(
+                    action_id=f"concurrency-setup-{index}",
+                    action=action,
+                    expected_state_version=index,
+                ),
+            )
+        get_save(second_session, "concurrency-user", created.save_id)
         request = ActionRequest(
             action_id="concurrent-travel",
             action="travel.advance",
-            expected_state_version=1,
+            expected_state_version=4,
         )
 
         perform_action(first_session, "concurrency-user", created.save_id, request)
@@ -204,7 +278,7 @@ def test_stale_loaded_session_cannot_overwrite_a_newer_action() -> None:
 
         current = get_save(first_session, "concurrency-user", created.save_id)
         assert current.route_offset == 1
-        assert current.state_version == 2
+        assert current.state_version == 5
     finally:
         first_session.close()
         second_session.close()

@@ -47,6 +47,7 @@ def serialize_state(save: Save) -> SaveState:
         attributes=json.loads(save.attributes),
         equipment=json.loads(save.equipment),
         homestead=json.loads(save.homestead),
+        prologue=json.loads(save.prologue_state),
         state_version=save.state_version,
         content_version=save.content_version,
         route_id=save.route_id,
@@ -105,19 +106,53 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
         )
 
     discovered = frozenset(json.loads(save.discovered_locations))
-    if request.action == "gather.wood":
+    prologue = json.loads(save.prologue_state)
+    if request.action == "homestead.explore":
+        if prologue["stranger_met"]:
+            raise ValueError("the grounds have already been explored")
+        prologue.update(stranger_met=True, quest_status="offered")
+        result_events = [
+            {"type": "stranger.appears"},
+            {"type": "quest.offered", "quest_id": "a_fathers_shadow"},
+        ]
+        next_offset = save.route_offset
+        next_discovered = save.discovered_locations
+        next_resources = save.resources
+    elif request.action == "quest.accept":
+        if not prologue["stranger_met"] or prologue["quest_status"] != "offered":
+            raise ValueError("the stranger has no quest to offer")
+        prologue["quest_status"] = "active"
+        result_events = [{"type": "quest.accepted", "quest_id": "a_fathers_shadow"}]
+        next_offset = save.route_offset
+        next_discovered = save.discovered_locations
+        next_resources = save.resources
+    elif request.action == "adventure.start":
+        if prologue["quest_status"] != "active":
+            raise ValueError("accept A Father's Shadow before starting the adventure")
+        if prologue["adventure_started"]:
+            raise ValueError("the Western Road adventure is already underway")
+        prologue["adventure_started"] = True
+        result_events = [{"type": "adventure.started", "route_id": save.route_id}]
+        next_offset = save.route_offset
+        next_discovered = save.discovered_locations
+        next_resources = save.resources
+    elif request.action == "gather.wood":
         location_id = request.payload.get("location_id")
         result = gather_wood(discovered, json.loads(save.resources), location_id)
         next_offset = save.route_offset
         next_discovered = save.discovered_locations
         next_resources = json.dumps(result.resources, sort_keys=True)
+        result_events = list(result.events)
     else:
+        if not prologue["adventure_started"]:
+            raise ValueError("begin A Father's Shadow before traveling")
         current = TravelState(save.route_id, save.route_offset, discovered)
         travel_result = advance(load_route(save.route_id), current)
         result = travel_result
         next_offset = result.state.offset
         next_discovered = json.dumps(sorted(result.state.discovered))
         next_resources = save.resources
+        result_events = list(result.events)
 
     next_version = save.state_version + 1
     updated = db.execute(
@@ -131,6 +166,7 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
             route_offset=next_offset,
             discovered_locations=next_discovered,
             resources=next_resources,
+            prologue_state=json.dumps(prologue, sort_keys=True),
             state_version=next_version,
         )
     )
@@ -155,11 +191,12 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
     save.route_offset = next_offset
     save.discovered_locations = next_discovered
     save.resources = next_resources
+    save.prologue_state = json.dumps(prologue, sort_keys=True)
     save.state_version = next_version
     response = ActionResponse(
         action_id=request.action_id,
         state_version=save.state_version,
-        events=list(result.events),
+        events=result_events,
         state=serialize_state(save),
     )
     db.add(

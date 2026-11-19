@@ -9,9 +9,21 @@ class CreateSaveRequest(BaseModel):
     archetype_id: Literal["son_of_blacksmith"] = "son_of_blacksmith"
 
 
+class PrologueState(BaseModel):
+    stranger_met: bool
+    quest_status: Literal["inactive", "offered", "active", "completed"]
+    adventure_started: bool
+
+
 class ActionRequest(BaseModel):
     action_id: str = Field(min_length=1, max_length=64)
-    action: Literal["travel.advance", "gather.wood"]
+    action: Literal[
+        "homestead.explore",
+        "quest.accept",
+        "adventure.start",
+        "travel.advance",
+        "gather.wood",
+    ]
     expected_state_version: int = Field(ge=1)
     payload: dict[str, Any] = Field(default_factory=dict)
 
@@ -24,6 +36,7 @@ class SaveState(BaseModel):
     attributes: dict[str, int]
     equipment: list[str]
     homestead: dict[str, Any]
+    prologue: PrologueState
     state_version: int
     content_version: str
     route_id: str
