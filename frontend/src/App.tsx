@@ -14,6 +14,8 @@ type SaveState = {
     stranger_met: boolean;
     quest_status: "inactive" | "offered" | "active" | "completed";
     adventure_started: boolean;
+    briarbrook_contacted: boolean;
+    father_lead_revealed: boolean;
   };
   state_version: number;
   content_version: string;
@@ -33,7 +35,7 @@ type ActionResponse = {
   action_id: string;
   state_version: number;
   replayed: boolean;
-  events: Array<{ type: string; location_id?: string; offset?: number; skill?: string; amount?: number; resource?: string }>;
+  events: Array<{ type: string; location_id?: string; offset?: number; skill?: string; amount?: number; resource?: string; text?: string; speaker?: string }>;
   state: SaveState;
 };
 
@@ -119,10 +121,13 @@ function eventClass(message: string): string {
   return "normal";
 }
 
-function formatGameEvent(event: { type: string; location_id?: string; offset?: number; quest_id?: string; skill?: string; amount?: number; resource?: string }, turn: number): string {
+function formatGameEvent(event: { type: string; location_id?: string; offset?: number; quest_id?: string; skill?: string; amount?: number; resource?: string; text?: string; speaker?: string }, turn: number): string {
   if (event.type === "stranger.appears") return "NARRATIVE // A mysterious stranger recognizes your family name.";
   if (event.type === "quest.offered") return "QUEST // A Father's Shadow is waiting for your answer.";
   if (event.type === "quest.accepted") return "QUEST // Accepted: A Father's Shadow. Briarbrook holds the next lead.";
+  if (event.type === "npc.dialogue") return `DIALOGUE // ${event.speaker ? `${event.speaker}: ` : ""}${event.text ?? "Master Garrick studies you in silence."}`;
+  if (event.type === "story.revelation") return `NARRATIVE // ${event.text ?? "The King's account was incomplete."}`;
+  if (event.type === "quest.completed") return "QUEST // Completed: A Father's Shadow. The investigation has found its first true lead.";
   if (event.type === "adventure.started") return "SYSTEM // WESTERN ROAD GUIDANCE ACTIVE · DESTINATION BRIARBROOK";
   if (event.type === "tutorial.tracks") return "[Turn 3] You find unusual tracks crossing the road. Something is following the old route.";
   if (event.type === "tutorial.goblin") return "[Turn 5] A Goblin Highwayman blocks the Western Road.";
@@ -289,7 +294,7 @@ function GameApp() {
     }
   }, [appendEvents, busy, routeMap?.length, state]);
 
-  async function runPrologueAction(action: "homestead.explore" | "quest.accept" | "adventure.start") {
+  async function runPrologueAction(action: "homestead.explore" | "quest.accept" | "adventure.start" | "npc.garrick.talk") {
     if (!state || busy) return;
     setBusy(true);
     setError(null);
@@ -436,6 +441,7 @@ function GameApp() {
         ...(state?.prologue.quest_status === "offered" ? [{ id: "accept", label: "Accept Quest", icon: "✦", enabled: !busy, run: () => void runPrologueAction("quest.accept") }] : []),
         ...(state?.prologue.quest_status === "active" && !state.prologue.adventure_started ? [{ id: "adventure", label: "Head Out on Adventure", icon: "➜", enabled: !busy, run: () => void runPrologueAction("adventure.start") }] : []),
         ...(state?.prologue.adventure_started ? [{ id: "travel", label: "Advance", icon: "➜", enabled: Boolean(state) && !busy && state?.route_offset !== routeMap?.length, run: () => void advanceTravel() }] : []),
+        ...(state?.route_offset === routeMap?.length && state?.prologue.quest_status === "active" ? [{ id: "garrick", label: "Speak to Master Garrick", icon: "✦", enabled: !busy, run: () => void runPrologueAction("npc.garrick.talk") }] : []),
         { id: "gather", label: "Gather wood", icon: "❖", enabled: Boolean(state?.discovered_locations.includes("old_timberwood")) && !busy, hint: "Gather wood at Old Timberwood.", run: () => void gatherWood() },
         { id: "craft", label: "Craft", icon: "◆", enabled: false, hint: "Crafting is not implemented yet." },
       ];
@@ -509,7 +515,7 @@ function GameApp() {
           </>}
 
           {activeTab === "map" && state && <PlayerWorldMap saveId={state.save_id} stateVersion={state.state_version} adventureStarted={state.prologue.adventure_started} onAdvance={() => void advanceTravel()} busy={busy} />}
-          {activeTab === "journal" && <section className="quest-journal"><div className="view-heading"><p className="context-label">Adventure ledger</p><h2>Quest Journal</h2><p className="muted">Track objectives, story threads, and contracts as the world begins to make demands.</p></div><div className="quest-layout"><aside className="quest-list"><div className="quest-list-heading">Active quests <small>{state?.prologue.quest_status === "active" ? 1 : 0}</small></div>{state?.prologue.quest_status === "active" ? <button className="quest-entry" type="button">A Father's Shadow</button> : <p className="ledger-empty">No quests have been recorded yet.</p>}<div className="quest-list-heading">Completed <small>0</small></div><p className="ledger-empty">The ledger is waiting for its first completed story.</p></aside><section className="quest-details"><p className="context-label">Selected quest</p>{state?.prologue.quest_status === "active" ? <><h3>A Father's Shadow</h3><p className="muted">A stranger claims the King's account of your father's service is incomplete. Travel to Briarbrook and find someone who remembers him.</p><p className="quest-objective">{state.prologue.adventure_started ? "▣ Travel to Briarbrook — adventure underway" : "□ Accept the guided adventure to Briarbrook"}</p></> : <><h3>No quest selected</h3><p className="muted">Quest objectives, lore, and rewards will appear here when quest definitions arrive.</p></>}</section></div></section>}
+          {activeTab === "journal" && <section className="quest-journal"><div className="view-heading"><p className="context-label">Adventure ledger</p><h2>Quest Journal</h2><p className="muted">Track objectives, story threads, and contracts as the world begins to make demands.</p></div><div className="quest-layout"><aside className="quest-list"><div className="quest-list-heading">Active quests <small>{state?.prologue.quest_status === "active" ? 1 : 0}</small></div>{state?.prologue.quest_status === "active" ? <button className="quest-entry" type="button">A Father's Shadow</button> : <p className="ledger-empty">No active quests.</p>}<div className="quest-list-heading">Completed <small>{state?.prologue.quest_status === "completed" ? 1 : 0}</small></div>{state?.prologue.quest_status === "completed" ? <button className="quest-entry completed" type="button">A Father's Shadow</button> : <p className="ledger-empty">The ledger is waiting for its first completed story.</p>}</aside><section className="quest-details"><p className="context-label">Selected quest</p>{state?.prologue.quest_status === "active" ? <><h3>A Father's Shadow</h3><p className="muted">A stranger claims the King's account of your father's service is incomplete. Travel to Briarbrook and find someone who remembers him.</p><p className="quest-objective">{state.prologue.adventure_started ? "▣ Travel to Briarbrook — adventure underway" : "□ Accept the guided adventure to Briarbrook"}</p></> : state?.prologue.quest_status === "completed" ? <><h3>A Father's Shadow</h3><p className="muted">Master Garrick Cobb confirmed that your father was investigating something unrelated to the war shortly before his final campaign.</p><p className="quest-objective complete">▣ Investigation complete — a new lead has been recorded</p></> : <><h3>No quest selected</h3><p className="muted">Quest objectives, lore, and rewards will appear here when quest definitions arrive.</p></>}</section></div></section>}
           {activeTab === "character" && <section className="panel-empty"><p className="context-label">Character</p><h2>A craftsperson on the road</h2><p className="muted">Attributes, mastery, equipment, and progression are not modeled in this vertical slice yet.</p></section>}
           {activeTab === "inventory" && <section className="panel-empty"><p className="context-label">Inventory</p><h2>Carried supplies</h2><p className="muted">Wood: {state?.resources.wood ?? 0}. Item slots and equipment will be added with crafting.</p></section>}
         </section>

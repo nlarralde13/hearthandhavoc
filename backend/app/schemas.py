@@ -13,6 +13,8 @@ class PrologueState(BaseModel):
     stranger_met: bool
     quest_status: Literal["inactive", "offered", "active", "completed"]
     adventure_started: bool
+    briarbrook_contacted: bool = False
+    father_lead_revealed: bool = False
 
 
 class ActionRequest(BaseModel):
@@ -21,6 +23,7 @@ class ActionRequest(BaseModel):
         "homestead.explore",
         "quest.accept",
         "adventure.start",
+        "npc.garrick.talk",
         "travel.advance",
         "gather.wood",
     ]

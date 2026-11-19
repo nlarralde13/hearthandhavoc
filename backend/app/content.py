@@ -68,6 +68,21 @@ def validate_route_record(record: Any, route_id: str) -> dict[str, Any]:
     return record
 
 
+def validate_npc_record(record: Any, npc_id: str) -> dict[str, Any]:
+    if not isinstance(record, dict) or record.get("npc_id") != npc_id:
+        raise ContentError(f"npc content ID does not match filename: {npc_id}")
+    if not isinstance(record.get("content_version"), str) or not record["content_version"]:
+        raise ContentError(f"npc content version is invalid: {npc_id}")
+    if not isinstance(record.get("display_name"), str) or not record["display_name"]:
+        raise ContentError(f"npc display name is invalid: {npc_id}")
+    if not isinstance(record.get("location_id"), str) or not record["location_id"]:
+        raise ContentError(f"npc location is invalid: {npc_id}")
+    dialogue = record.get("dialogue")
+    if not isinstance(dialogue, dict) or not all(isinstance(value, str) and value for value in dialogue.values()):
+        raise ContentError(f"npc dialogue is invalid: {npc_id}")
+    return record
+
+
 @lru_cache
 def load_route_record(route_id: str) -> dict[str, Any]:
     path = CONTENT_ROOT / "routes" / f"{route_id}.json"
@@ -77,6 +92,16 @@ def load_route_record(route_id: str) -> dict[str, Any]:
         raise ContentError(f"route content is unavailable: {route_id}") from exc
 
     return validate_route_record(record, route_id)
+
+
+@lru_cache
+def load_npc_record(npc_id: str) -> dict[str, Any]:
+    path = CONTENT_ROOT / "npcs" / f"{npc_id}.json"
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        raise ContentError(f"npc content is unavailable: {npc_id}") from exc
+    return validate_npc_record(record, npc_id)
 
 
 def validate_all_content(content_root: Path = CONTENT_ROOT) -> list[str]:
@@ -92,6 +117,12 @@ def validate_all_content(content_root: Path = CONTENT_ROOT) -> list[str]:
         route_id = path.stem
         validate_route_record(record, route_id)
         route_ids.append(route_id)
+    for path in sorted((content_root / "npcs").glob("*.json")):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ContentError(f"cannot read npc content: {path.name}") from exc
+        validate_npc_record(record, path.stem)
     return route_ids
 
 

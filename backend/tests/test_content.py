@@ -1,9 +1,15 @@
 import pytest
-from app.content import ContentError, validate_all_content, validate_route_record
+from app.content import ContentError, load_npc_record, validate_all_content, validate_route_record
 
 
 def test_all_checked_in_content_is_valid() -> None:
     assert validate_all_content() == ["western_road"]
+
+
+def test_master_garrick_content_contains_authored_father_lead() -> None:
+    npc = load_npc_record("master_garrick_cobb")
+    assert npc["display_name"] == "Master Garrick Cobb"
+    assert "Briarbrook" in npc["dialogue"]["father_lead"]
 
 
 def test_route_validation_rejects_duplicate_offsets() -> None:

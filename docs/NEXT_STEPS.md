@@ -14,22 +14,22 @@ features.
   A Father's Shadow activation, and guided-adventure selection.
 - **M3 complete:** versioned Western Road tutorial events, Goblin Highwayman
   interruption, Old Timberwood discovery, manual gathering, and logging mastery.
-- **Next:** M4 Briarbrook arrival, the father's-history NPC conversation, and
-  authored/Qwen-fallback narrative progression.
+- **M4 complete:** Briarbrook arrival, authored Master Garrick Cobb dialogue,
+  the first father-history revelation, and idempotent quest completion.
+- **Next:** M5 bidirectional expedited travel with one persisted ambush roll.
 
 ## Recommended order
 
-### 1. Implement Briarbrook narrative payoff
+### 1. Implement bidirectional expedited travel
 
-Extend the existing prologue with versioned content and server-authoritative
-progress for:
+Extend the existing route and save state with server-authoritative progress for:
 
-- arrival at Briarbrook;
-- the designated NPC conversation;
-- the first meaningful revelation about the player's father;
-- quest progression and authored fallback dialogue.
+- unlocking Homestead ↔ Briarbrook after first traversal;
+- one-action safe travel and a configurable 40% ambush roll;
+- interrupted journey persistence through combat, refresh, and reconnect;
+- continuation, flee, and defeat outcomes without duplicate rolls or rewards.
 
-Keep all story flags and quest progression authoritative on the backend.
+Keep the route graph and travel rules authoritative on the backend.
 
 ### 2. Add the homestead quest vertical slice
 

@@ -127,6 +127,8 @@ def test_m2_prologue_exploration_quest_and_adventure_are_idempotent() -> None:
             "stranger_met": True,
             "quest_status": "offered",
             "adventure_started": False,
+            "briarbrook_contacted": False,
+            "father_lead_revealed": False,
         }
         assert [event["type"] for event in explore.json()["events"]] == [
             "stranger.appears",
@@ -210,6 +212,83 @@ def test_m3_guided_route_starts_goblin_encounter_and_tracks_gathering_mastery() 
         assert {event["type"] for event in gathered.json()["events"]} == {
             "gathering.completed", "mastery.gained"
         }
+
+
+def test_m4_briarbrook_conversation_reveals_father_lead_and_completes_quest() -> None:
+    with TestClient(app) as client:
+        headers = {"X-Dev-User-ID": "m4-user"}
+        created = client.post("/api/v1/saves", headers=headers, json={}).json()
+        version = start_adventure(client, headers, created["save_id"])
+        url = f"/api/v1/saves/{created['save_id']}/actions"
+
+        for turn in range(1, 21):
+            response = client.post(
+                url,
+                headers=headers,
+                json={
+                    "action_id": f"m4-route-{turn}",
+                    "action": "travel.advance",
+                    "expected_state_version": version,
+                    "payload": {},
+                },
+            )
+            assert response.status_code == 200
+            version = response.json()["state_version"]
+            if turn == 5:
+                resolve_combat(client, headers, created["save_id"])
+
+        assert response.json()["state"]["route_offset"] == 20
+        assert "briarbrook" in response.json()["state"]["discovered_locations"]
+
+        talk = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m4-garrick-talk",
+                "action": "npc.garrick.talk",
+                "expected_state_version": version,
+                "payload": {},
+            },
+        )
+        assert talk.status_code == 200
+        assert talk.json()["state"]["prologue"] == {
+            "stranger_met": True,
+            "quest_status": "completed",
+            "adventure_started": True,
+            "briarbrook_contacted": True,
+            "father_lead_revealed": True,
+        }
+        assert [event["type"] for event in talk.json()["events"]] == [
+            "npc.dialogue",
+            "story.revelation",
+            "quest.completed",
+        ]
+        assert "unrelated to the war" in talk.json()["events"][1]["text"]
+
+        replay = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m4-garrick-talk",
+                "action": "npc.garrick.talk",
+                "expected_state_version": version,
+                "payload": {},
+            },
+        )
+        assert replay.status_code == 200
+        assert replay.json()["replayed"] is True
+
+        duplicate = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m4-garrick-talk-again",
+                "action": "npc.garrick.talk",
+                "expected_state_version": talk.json()["state_version"],
+                "payload": {},
+            },
+        )
+        assert duplicate.status_code == 422
 
 
 def test_saves_are_owned_by_the_authenticated_actor() -> None:

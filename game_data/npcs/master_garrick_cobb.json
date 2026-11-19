@@ -1,0 +1,10 @@
+{
+  "content_version": "0.1.0",
+  "npc_id": "master_garrick_cobb",
+  "display_name": "Master Garrick Cobb",
+  "location_id": "briarbrook",
+  "dialogue": {
+    "introduction": "Master Garrick Cobb remembers your father, and looks less surprised to see you than a respectable man ought to.",
+    "father_lead": "Your father visited Briarbrook shortly before his final campaign. He was investigating something unrelated to the war, and he left with more questions than answers."
+  }
+}

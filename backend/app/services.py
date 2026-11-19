@@ -5,7 +5,7 @@ from dataclasses import asdict
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.content import load_route, load_route_record
+from app.content import load_npc_record, load_route, load_route_record
 from app.domain.combat import (
     CombatError,
     CombatState,
@@ -143,6 +143,26 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
             raise ValueError("the Western Road adventure is already underway")
         prologue["adventure_started"] = True
         result_events = [{"type": "adventure.started", "route_id": save.route_id}]
+        next_offset = save.route_offset
+        next_discovered = save.discovered_locations
+        next_resources = save.resources
+    elif request.action == "npc.garrick.talk":
+        route = load_route(save.route_id)
+        if save.route_offset < route.length:
+            raise ValueError("reach Briarbrook before speaking with Master Garrick Cobb")
+        if prologue["quest_status"] != "active":
+            raise ValueError("there is no active father's-shadow investigation")
+        if prologue.get("briarbrook_contacted", False):
+            raise ValueError("Master Garrick has already shared his lead")
+        npc = load_npc_record("master_garrick_cobb")
+        prologue["briarbrook_contacted"] = True
+        prologue["father_lead_revealed"] = True
+        prologue["quest_status"] = "completed"
+        result_events = [
+            {"type": "npc.dialogue", "speaker": npc["display_name"], "text": npc["dialogue"]["introduction"]},
+            {"type": "story.revelation", "text": npc["dialogue"]["father_lead"]},
+            {"type": "quest.completed", "quest_id": "a_fathers_shadow"},
+        ]
         next_offset = save.route_offset
         next_discovered = save.discovered_locations
         next_resources = save.resources
