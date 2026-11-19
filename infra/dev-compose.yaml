@@ -6,6 +6,7 @@ services:
     environment:
       APP_ENV: development
       DATABASE_URL: sqlite:////data/hearth_and_havoc.db
+      WORLD_DATA_DIR: /data/world
       LOG_LEVEL: INFO
     ports:
       - "8100:8000"

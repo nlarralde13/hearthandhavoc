@@ -1,4 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import WorldEditor from "./WorldEditor";
 
 type SaveState = {
   save_id: string;
@@ -145,7 +146,7 @@ function HomesteadFloorPlan({ homestead }: { homestead: HomesteadState }) {
   );
 }
 
-export default function App() {
+function GameApp() {
   const [state, setState] = useState<SaveState | null>(null);
   const [needsCreation, setNeedsCreation] = useState(false);
   const [characterName, setCharacterName] = useState("");
@@ -510,4 +511,11 @@ export default function App() {
       </div>
     </main>
   );
+}
+
+export default function App() {
+  if (window.location.pathname === "/dev/world-editor") {
+    return <WorldEditor onExit={() => { window.location.href = "/"; }} />;
+  }
+  return <GameApp />;
 }

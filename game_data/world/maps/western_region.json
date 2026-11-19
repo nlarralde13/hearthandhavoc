@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0.0",
+  "id": "western_region",
+  "name": "Western Region",
+  "parent_map_id": null,
+  "parent_location_id": null,
+  "nodes": [
+    {
+      "id": "homestead",
+      "name": "Homestead",
+      "type": "homestead",
+      "map_id": "western_region",
+      "position": {"x": 160, "y": 300},
+      "description": "The inherited shack at the edge of the Western Road.",
+      "discovery": "starting_location",
+      "key_location": true,
+      "content": {"quest_ids": ["the_kings_generosity"]}
+    },
+    {
+      "id": "old_timberwood",
+      "name": "Old Timberwood",
+      "type": "wilderness",
+      "map_id": "western_region",
+      "position": {"x": 500, "y": 300},
+      "description": "Ancient trees bordering the Western Road.",
+      "discovery": "on_visit",
+      "key_location": false,
+      "content": {"gathering_table_id": "timberwood_resources", "encounter_table_id": "timberwood_encounters"}
+    },
+    {
+      "id": "briarbrook",
+      "name": "Briarbrook",
+      "type": "settlement",
+      "map_id": "western_region",
+      "position": {"x": 880, "y": 300},
+      "description": "A village with old memories and newer problems.",
+      "discovery": "on_visit",
+      "key_location": true,
+      "child_map_id": "briarbrook_town",
+      "content": {"quest_ids": ["a_fathers_shadow"], "npc_ids": ["master_garrick_cobb"]}
+    }
+  ],
+  "connections": [
+    {
+      "id": "western_road",
+      "source": "homestead",
+      "destination": "briarbrook",
+      "bidirectional": true,
+      "travel_turns": 20,
+      "discovery_requirements": [],
+      "expedited_travel": {"eligible": true, "ambush_chance": 0.4},
+      "narrative_id": "western_road_intro",
+      "waypoints": [{"location_id": "old_timberwood", "route_offset": 6}]
+    }
+  ]
+}

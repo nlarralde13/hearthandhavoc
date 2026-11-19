@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     oidc_issuer_url: str | None = None
     oidc_audience: str | None = None
     oidc_jwks_url: str | None = None
+    world_data_dir: str = "./game_data/world"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

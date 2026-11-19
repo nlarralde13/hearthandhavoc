@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "id": "briarbrook_town",
+  "name": "Briarbrook",
+  "parent_map_id": "western_region",
+  "parent_location_id": "briarbrook",
+  "nodes": [
+    {"id": "marketplace", "name": "Marketplace", "type": "interior", "map_id": "briarbrook_town", "position": {"x": 250, "y": 220}, "description": "Stalls, carts, and arguments over turnips.", "discovery": "on_visit"},
+    {"id": "tavern", "name": "Tavern", "type": "interior", "map_id": "briarbrook_town", "position": {"x": 600, "y": 220}, "description": "A warm room with unreliable information.", "discovery": "on_visit"},
+    {"id": "guild_hall", "name": "Guild Hall", "type": "interior", "map_id": "briarbrook_town", "position": {"x": 250, "y": 480}, "description": "A formal building for practical people.", "discovery": "on_visit"},
+    {"id": "town_hall", "name": "Town Hall", "type": "interior", "map_id": "briarbrook_town", "position": {"x": 600, "y": 480}, "description": "The official memory of Briarbrook.", "discovery": "on_visit", "key_location": true}
+  ],
+  "connections": [
+    {"id": "marketplace_tavern", "source": "marketplace", "destination": "tavern", "bidirectional": true, "travel_turns": 1},
+    {"id": "marketplace_guild_hall", "source": "marketplace", "destination": "guild_hall", "bidirectional": true, "travel_turns": 1},
+    {"id": "tavern_town_hall", "source": "tavern", "destination": "town_hall", "bidirectional": true, "travel_turns": 1}
+  ]
+}

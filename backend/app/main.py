@@ -32,6 +32,8 @@ from app.services import (
     serialize_state,
     start_combat,
 )
+from app.settings import get_settings
+from app.world import WorldMap, WorldValidation, list_world_maps, load_world_map, save_world_map
 
 
 @asynccontextmanager
@@ -53,6 +55,40 @@ app.add_middleware(
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "api"}
+
+
+def require_development_editor() -> None:
+    if get_settings().app_env != "development":
+        raise HTTPException(status_code=404, detail="development world editor is unavailable")
+
+
+@app.get("/api/v1/dev/world/maps", response_model=list[WorldMap])
+def dev_world_maps() -> list[WorldMap]:
+    require_development_editor()
+    try:
+        return list_world_maps()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+@app.get("/api/v1/dev/world/maps/{map_id}", response_model=WorldMap)
+def dev_world_map(map_id: str) -> WorldMap:
+    require_development_editor()
+    try:
+        return load_world_map(map_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+
+@app.put("/api/v1/dev/world/maps/{map_id}", response_model=WorldValidation)
+def put_dev_world_map(map_id: str, world_map: WorldMap) -> WorldValidation:
+    require_development_editor()
+    if world_map.id != map_id:
+        raise HTTPException(status_code=422, detail="map ID does not match URL")
+    try:
+        return save_world_map(world_map)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
 
 
 @app.post("/api/v1/saves", response_model=SaveState, status_code=status.HTTP_201_CREATED)
