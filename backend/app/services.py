@@ -42,6 +42,11 @@ def serialize_state(save: Save) -> SaveState:
     return SaveState(
         save_id=save.id,
         background_id=save.background_id,
+        character_name=save.character_name,
+        archetype_id=save.archetype_id,
+        attributes=json.loads(save.attributes),
+        equipment=json.loads(save.equipment),
+        homestead=json.loads(save.homestead),
         state_version=save.state_version,
         content_version=save.content_version,
         route_id=save.route_id,
@@ -51,8 +56,22 @@ def serialize_state(save: Save) -> SaveState:
     )
 
 
-def create_save(db: Session, owner_id: str, background_id: str) -> SaveState:
-    save = Save(owner_id=owner_id, background_id=background_id, root_seed=secrets.token_hex(32))
+def create_save(
+    db: Session,
+    owner_id: str,
+    background_id: str,
+    character_name: str | None = None,
+    archetype_id: str = "son_of_blacksmith",
+) -> SaveState:
+    if archetype_id != "son_of_blacksmith":
+        raise ValueError("only Son of a Blacksmith is playable in MVP 1.0")
+    save = Save(
+        owner_id=owner_id,
+        background_id=background_id,
+        character_name=character_name or "Blacksmith",
+        archetype_id=archetype_id,
+        root_seed=secrets.token_hex(32),
+    )
     db.add(save)
     db.commit()
     db.refresh(save)

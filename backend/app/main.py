@@ -59,7 +59,16 @@ def health() -> dict[str, str]:
 def post_save(
     request: CreateSaveRequest, db: Session = Depends(get_db), owner_id: str = Depends(actor_id)
 ) -> SaveState:
-    return create_save(db, owner_id, request.background_id)
+    try:
+        return create_save(
+            db,
+            owner_id,
+            request.background_id,
+            request.character_name,
+            request.archetype_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
 
 
 @app.get("/api/v1/saves/{save_id}/state", response_model=SaveState)

@@ -3,12 +3,22 @@ import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } fro
 type SaveState = {
   save_id: string;
   background_id: string;
+  character_name: string;
+  archetype_id: string;
+  attributes: Record<string, number>;
+  equipment: string[];
+  homestead: HomesteadState;
   state_version: number;
   content_version: string;
   route_id: string;
   route_offset: number;
   discovered_locations: string[];
   resources: Record<string, number>;
+};
+
+type HomesteadState = {
+  rooms: Array<{ id: string; type: string; condition: string; upgrades: { front_door: string } }>;
+  front_door: string;
 };
 
 type ActionResponse = {
@@ -101,8 +111,30 @@ function eventClass(message: string): string {
   return "normal";
 }
 
+function HomesteadFloorPlan({ homestead }: { homestead: HomesteadState }) {
+  const doorState = homestead.front_door === "repaired" ? "Repaired" : "Broken";
+  return (
+    <section className="homestead-console" aria-label="Inherited homestead">
+      <div className="homestead-floorplan" role="img" aria-label={`Single-room shack, front door ${doorState.toLowerCase()}`}>
+        <div className="homestead-room">
+          <span className="room-label">MAIN ROOM</span>
+          <span className={`room-door ${homestead.front_door}`} aria-hidden="true" />
+        </div>
+      </div>
+      <div className="homestead-readout">
+        <span>Inherited homestead</span>
+        <strong>Single-room shack</strong>
+        <small>Front Door: {doorState}</small>
+      </div>
+    </section>
+  );
+}
+
 export default function App() {
   const [state, setState] = useState<SaveState | null>(null);
+  const [needsCreation, setNeedsCreation] = useState(false);
+  const [characterName, setCharacterName] = useState("");
+  const [selectedArchetype, setSelectedArchetype] = useState("son_of_blacksmith");
   const [routeMap, setRouteMap] = useState<RouteMap | null>(null);
   const [combat, setCombat] = useState<CombatState | null>(null);
   const [events, setEvents] = useState<string[]>([]);
@@ -128,22 +160,12 @@ export default function App() {
     try {
       const saveId = localStorage.getItem(SAVE_KEY);
       if (!saveId) {
-        const created = await request<SaveState>("/api/v1/saves", {
-          method: "POST",
-          body: JSON.stringify({ background_id: "blacksmith" }),
-        });
-        localStorage.setItem(SAVE_KEY, created.save_id);
-        setState(created);
-        setRouteMap(await request<RouteMap>(`/api/v1/saves/${created.save_id}/map`));
-        setEvents([
-          "SYSTEM // NEW ADVENTURE INITIALIZED · BLACKSMITH PROFILE LOADED",
-          "SYSTEM // HOMESTEAD ONLINE · WESTERN ROAD AVAILABLE",
-          "NARRATIVE // The damaged shack is behind you. The road west waits beyond the gate.",
-        ]);
+        setNeedsCreation(true);
         return;
       }
       const loaded = await request<SaveState>(`/api/v1/saves/${saveId}/state`);
       setState(loaded);
+      setNeedsCreation(false);
       setRouteMap(await request<RouteMap>(`/api/v1/saves/${loaded.save_id}/map`));
       setEvents([
         `SYSTEM // LINK RESTORED · SAVE ${loaded.save_id.slice(0, 8).toUpperCase()} RESUMED`,
@@ -166,6 +188,36 @@ export default function App() {
       setBusy(false);
     }
   }, []);
+
+  async function createCharacter(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!characterName.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const created = await request<SaveState>("/api/v1/saves", {
+        method: "POST",
+        body: JSON.stringify({
+          background_id: "blacksmith",
+          character_name: characterName.trim(),
+          archetype_id: selectedArchetype,
+        }),
+      });
+      localStorage.setItem(SAVE_KEY, created.save_id);
+      setState(created);
+      setRouteMap(await request<RouteMap>(`/api/v1/saves/${created.save_id}/map`));
+      setNeedsCreation(false);
+      setEvents([
+        `SYSTEM // NEW ADVENTURE INITIALIZED · ${created.character_name.toUpperCase()} ONLINE`,
+        "SYSTEM // HOMESTEAD ONLINE · WESTERN ROAD AVAILABLE",
+        "NARRATIVE // The damaged shack is behind you. The road west waits beyond the gate.",
+      ]);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to create character.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     void loadSave();
@@ -294,8 +346,7 @@ export default function App() {
     setEncounterOpen(false);
     setEvents([]);
     localStorage.removeItem(SAVE_KEY);
-    await loadSave();
-    setAutoTravel(true);
+    setNeedsCreation(true);
   }
 
   function submitCommand(event: FormEvent<HTMLFormElement>) {
@@ -340,6 +391,29 @@ export default function App() {
 
   const knownWaypoints = routeMap?.waypoints.filter((waypoint) => waypoint.known) ?? [];
 
+  if (needsCreation) {
+    return (
+      <main className="shell">
+        <section className="game-console creation-console">
+          <header className="masthead"><div><h1>Hearth <span>&amp;</span> Havoc</h1></div><div className="version">MVP 1.0 · new adventure</div></header>
+          {error && <div className="notice error">{error}</div>}
+          <form className="character-creation" onSubmit={(event) => void createCharacter(event)}>
+            <div className="creation-heading"><p className="context-label">Character creation</p><h2>Choose your beginning</h2><p className="muted">The road is waiting. It has been waiting for some time, and is becoming insufferable about it.</p></div>
+            <label className="name-field">Character name<input value={characterName} onChange={(event) => setCharacterName(event.target.value)} placeholder="Enter a name" maxLength={80} required autoFocus /></label>
+            <div className="archetype-grid" aria-label="Starting archetypes">
+              <button type="button" className={`archetype-card ${selectedArchetype === "son_of_blacksmith" ? "selected" : ""}`} onClick={() => setSelectedArchetype("son_of_blacksmith")}>
+                <span className="archetype-status">Playable</span><strong>Son of a Blacksmith</strong><span>Strong hands, a battered inheritance, and a practical relationship with fire.</span><small>Might 14 · Agility 8 · Endurance 10 · Intellect 8</small>
+              </button>
+              <button type="button" className="archetype-card disabled" disabled><span className="archetype-status">Coming soon</span><strong>Child of a Farmhand</strong><span>A life of weather, soil, and sturdy opinions.</span></button>
+              <button type="button" className="archetype-card disabled" disabled><span className="archetype-status">Coming soon</span><strong>Apprentice Scholar</strong><span>Questions, ink stains, and an alarming number of books.</span></button>
+            </div>
+            <div className="creation-footer"><p className="muted">Starting equipment: Forge Hammer · Nailed Scrap Board · Blacksmith's Apron</p><button className="primary-button" type="submit" disabled={busy || !characterName.trim()}>Enter the world</button></div>
+          </form>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="shell">
       <div className="game-console">
@@ -351,7 +425,7 @@ export default function App() {
         {error && <div className="notice error">{error}</div>}
 
         <section className="character-strip" aria-label="Character status">
-          <div className="character-identity"><span className="crest">♜</span><div><strong>Blacksmith</strong><small>Development save · turn {state?.route_offset ?? "—"}</small></div></div>
+          <div className="character-identity"><span className="crest">♜</span><div><strong>{state?.character_name ?? "Blacksmith"}</strong><small>Son of a Blacksmith · turn {state?.route_offset ?? "—"}</small></div></div>
           <div className="status-metric"><span>HP</span><strong>— / —</strong><small>not modeled</small></div>
           <div className="status-metric"><span>Stamina</span><strong>—</strong><small>not modeled</small></div>
           <div className="status-metric"><span>Wood</span><strong>{state?.resources.wood ?? 0}</strong><small>carried</small></div>
@@ -362,6 +436,7 @@ export default function App() {
         <section className={`console-content ${activeTab === "home" ? "home-console-surface" : ""}`}>
           {activeTab === "home" && <>
             <header className="terminal-context"><div><p className="context-label">Home terminal · Western Road</p><h2>Adventure channel</h2><p className="muted">The world is listening. Type a command or choose an action below.</p></div><span className="terminal-state">{autoTravel ? `AUTO ${countdown}s` : "PAUSED"}</span></header>
+            {state?.homestead && <HomesteadFloorPlan homestead={state.homestead} />}
             <div className="terminal-window">
               <div className="terminal-banner">HEARTH &amp; HAVOC // LIVE WORLD FEED</div>
               <ol className="terminal-events" ref={terminalRef} onScroll={handleTerminalScroll} aria-live="polite">

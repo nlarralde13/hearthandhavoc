@@ -21,6 +21,11 @@ def test_create_load_and_replay_travel() -> None:
         assert "root_seed" not in created
         assert created["state_version"] == 1
         assert created["resources"] == {"wood": 0}
+        assert created["character_name"] == "Blacksmith"
+        assert created["archetype_id"] == "son_of_blacksmith"
+        assert created["attributes"] == {"agility": 8, "endurance": 10, "intellect": 8, "might": 14}
+        assert created["equipment"] == ["Forge Hammer", "Nailed Scrap Board", "Blacksmith's Apron"]
+        assert created["homestead"]["front_door"] == "broken"
 
         command = {
             "action_id": "travel-1",
@@ -48,6 +53,25 @@ def test_create_load_and_replay_travel() -> None:
             json={**command, "action_id": "travel-2"},
         )
         assert stale.status_code == 409
+
+
+def test_character_creation_persists_name_and_rejects_unplayable_archetype() -> None:
+    with TestClient(app) as client:
+        headers = {"X-Dev-User-ID": "character-user"}
+        created = client.post(
+            "/api/v1/saves",
+            headers=headers,
+            json={"character_name": "Mara", "archetype_id": "son_of_blacksmith"},
+        )
+        assert created.status_code == 201
+        assert created.json()["character_name"] == "Mara"
+
+        disabled = client.post(
+            "/api/v1/saves",
+            headers=headers,
+            json={"character_name": "Mara", "archetype_id": "farmhand"},
+        )
+        assert disabled.status_code == 422
 
 
 def test_saves_are_owned_by_the_authenticated_actor() -> None:

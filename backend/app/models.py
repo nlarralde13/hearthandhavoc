@@ -17,6 +17,24 @@ class Save(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     owner_id: Mapped[str] = mapped_column(String(255), index=True)
     background_id: Mapped[str] = mapped_column(String(64), default="blacksmith")
+    character_name: Mapped[str] = mapped_column(String(80), default="Blacksmith")
+    archetype_id: Mapped[str] = mapped_column(String(64), default="son_of_blacksmith")
+    attributes: Mapped[str] = mapped_column(
+        Text,
+        default='{"agility": 8, "endurance": 10, "intellect": 8, "might": 14}',
+    )
+    equipment: Mapped[str] = mapped_column(
+        Text,
+        default='["Forge Hammer", "Nailed Scrap Board", "Blacksmith\'s Apron"]',
+    )
+    homestead: Mapped[str] = mapped_column(
+        Text,
+        default=(
+            '{"rooms": [{"id": "main_room", "type": "shack", "grid_x": 0, '
+            '"grid_y": 0, "width": 1, "height": 1, "condition": "dilapidated", '
+            '"upgrades": {"front_door": "broken"}}], "front_door": "broken"}'
+        ),
+    )
     state_version: Mapped[int] = mapped_column(Integer, default=1)
     root_seed: Mapped[str] = mapped_column(String(64))
     content_version: Mapped[str] = mapped_column(String(32), default="0.1.0")

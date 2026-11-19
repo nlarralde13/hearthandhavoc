@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 
 class CreateSaveRequest(BaseModel):
     background_id: Literal["blacksmith"] = "blacksmith"
+    character_name: str | None = Field(default=None, min_length=1, max_length=80)
+    archetype_id: Literal["son_of_blacksmith"] = "son_of_blacksmith"
 
 
 class ActionRequest(BaseModel):
@@ -17,6 +19,11 @@ class ActionRequest(BaseModel):
 class SaveState(BaseModel):
     save_id: str
     background_id: str
+    character_name: str
+    archetype_id: str
+    attributes: dict[str, int]
+    equipment: list[str]
+    homestead: dict[str, Any]
     state_version: int
     content_version: str
     route_id: str
