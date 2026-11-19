@@ -129,6 +129,8 @@ def test_m2_prologue_exploration_quest_and_adventure_are_idempotent() -> None:
             "adventure_started": False,
             "briarbrook_contacted": False,
             "father_lead_revealed": False,
+            "expedited_unlocked": False,
+            "expedited_journey": None,
         }
         assert [event["type"] for event in explore.json()["events"]] == [
             "stranger.appears",
@@ -257,6 +259,8 @@ def test_m4_briarbrook_conversation_reveals_father_lead_and_completes_quest() ->
             "adventure_started": True,
             "briarbrook_contacted": True,
             "father_lead_revealed": True,
+            "expedited_unlocked": True,
+            "expedited_journey": None,
         }
         assert [event["type"] for event in talk.json()["events"]] == [
             "npc.dialogue",
@@ -289,6 +293,113 @@ def test_m4_briarbrook_conversation_reveals_father_lead_and_completes_quest() ->
             },
         )
         assert duplicate.status_code == 422
+
+
+def test_m5_expedited_travel_is_bidirectional_and_persists_one_ambush_roll(monkeypatch) -> None:
+    with TestClient(app) as client:
+        headers = {"X-Dev-User-ID": "m5-user"}
+        created = client.post("/api/v1/saves", headers=headers, json={}).json()
+        version = start_adventure(client, headers, created["save_id"])
+        url = f"/api/v1/saves/{created['save_id']}/actions"
+
+        for turn in range(1, 21):
+            response = client.post(
+                url,
+                headers=headers,
+                json={
+                    "action_id": f"m5-setup-route-{turn}",
+                    "action": "travel.advance",
+                    "expected_state_version": version,
+                    "payload": {},
+                },
+            )
+            assert response.status_code == 200
+            version = response.json()["state_version"]
+            if turn == 5:
+                resolve_combat(client, headers, created["save_id"])
+
+        monkeypatch.setattr("app.services.roll_expedited_ambush", lambda *args: 0.9)
+        safe_home = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m5-safe-home",
+                "action": "travel.expedited",
+                "expected_state_version": version,
+                "payload": {},
+            },
+        )
+        assert safe_home.status_code == 200
+        version = safe_home.json()["state_version"]
+        assert safe_home.json()["state"]["route_offset"] == 0
+        assert safe_home.json()["state"]["prologue"]["expedited_journey"]["status"] == "completed"
+
+        safe_briarbrook = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m5-safe-briarbrook",
+                "action": "travel.expedited",
+                "expected_state_version": version,
+                "payload": {},
+            },
+        )
+        assert safe_briarbrook.status_code == 200
+        version = safe_briarbrook.json()["state_version"]
+        assert safe_briarbrook.json()["state"]["route_offset"] == 20
+
+        monkeypatch.setattr("app.services.roll_expedited_ambush", lambda *args: 0.1)
+        ambush = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m5-ambush-home",
+                "action": "travel.expedited",
+                "expected_state_version": version,
+                "payload": {},
+            },
+        )
+        assert ambush.status_code == 200
+        assert ambush.json()["state"]["route_offset"] == 10
+        journey = ambush.json()["state"]["prologue"]["expedited_journey"]
+        assert journey["status"] == "ambush"
+        assert journey["ambush_roll"] == 0.1
+        assert {event["type"] for event in ambush.json()["events"]} >= {
+            "travel.expedited", "travel.ambush", "combat.started"
+        }
+
+        replay = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m5-ambush-home",
+                "action": "travel.expedited",
+                "expected_state_version": version,
+                "payload": {},
+            },
+        )
+        assert replay.status_code == 200
+        assert replay.json()["replayed"] is True
+
+        combat_url = f"/api/v1/saves/{created['save_id']}/combat"
+        combat = client.get(combat_url, headers=headers).json()
+        while combat["status"] == "active":
+            combat_response = client.post(
+                f"{combat_url}/actions",
+                headers=headers,
+                json={
+                    "action_id": f"m5-ambush-combat-{combat['action_index']}",
+                    "action": "attack",
+                    "expected_action_index": combat["action_index"],
+                },
+            )
+            assert combat_response.status_code == 200
+            combat = combat_response.json()["state"]
+
+        assert combat["status"] == "victory"
+        resumed = client.get(f"/api/v1/saves/{created['save_id']}/state", headers=headers).json()
+        assert resumed["route_offset"] == 0
+        assert resumed["prologue"]["expedited_journey"]["status"] == "completed"
 
 
 def test_saves_are_owned_by_the_authenticated_actor() -> None:

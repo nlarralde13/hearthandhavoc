@@ -116,6 +116,11 @@ def player_world_map(
         if map_id == "western_region":
             road = next((item for item in world_map.connections if item.id == save.route_id), None)
             route_length = road.travel_turns if road else save.route_offset
+            expedited_journey = prologue.get("expedited_journey") or {}
+            expedited_pending = expedited_journey.get("status") == "ambush"
+            expedited_unlocked = prologue.get("expedited_unlocked", False) or (
+                "briarbrook" in discovered
+            )
             known = {"homestead", *discovered}
             if (
                 prologue["quest_status"] in {"offered", "active", "completed"}
@@ -131,10 +136,29 @@ def player_world_map(
             )
             travel = PlayerTravelProgress(
                 in_transit=current is None and save.route_offset > 0,
-                source="homestead" if save.route_offset > 0 and current is None else None,
-                destination="briarbrook" if save.route_offset > 0 and current is None else None,
-                completed_turns=save.route_offset if current is None else 0,
+                source=(
+                    expedited_journey.get("source")
+                    if expedited_pending
+                    else ("homestead" if save.route_offset > 0 and current is None else None)
+                ),
+                destination=(
+                    expedited_journey.get("destination")
+                    if expedited_pending
+                    else ("briarbrook" if save.route_offset > 0 and current is None else None)
+                ),
+                completed_turns=(
+                    expedited_journey.get("waypoint_offset", save.route_offset)
+                    if expedited_pending
+                    else (save.route_offset if current is None else 0)
+                ),
                 total_turns=route_length if current is None else 0,
+                expedited_available=(
+                    expedited_unlocked
+                    and current in {"homestead", "briarbrook"}
+                    and not expedited_pending
+                ),
+                expedited_in_progress=expedited_pending,
+                expedited_ambush_pending=expedited_pending,
             )
         else:
             parent = load_world_map(world_map.parent_map_id) if world_map.parent_map_id else None

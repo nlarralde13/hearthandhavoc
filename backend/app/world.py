@@ -95,6 +95,9 @@ class PlayerTravelProgress(BaseModel):
     destination: str | None = None
     completed_turns: int = 0
     total_turns: int = 0
+    expedited_available: bool = False
+    expedited_in_progress: bool = False
+    expedited_ambush_pending: bool = False
 
 
 class PlayerWorldMap(BaseModel):

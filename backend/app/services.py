@@ -1,3 +1,4 @@
+import hashlib
 import json
 import secrets
 from dataclasses import asdict
@@ -24,6 +25,7 @@ from app.schemas import (
     RouteWaypointView,
     SaveState,
 )
+from app.world import load_world_map
 
 
 class SaveNotFound(LookupError):
@@ -36,6 +38,22 @@ class StateConflict(ValueError):
 
 class CombatNotFound(LookupError):
     pass
+
+
+def roll_expedited_ambush(
+    root_seed: str, source: str, destination: str, state_version: int
+) -> float:
+    material = f"{root_seed}:expedited:{source}:{destination}:{state_version}".encode()
+    digest = hashlib.sha256(material).digest()
+    return int.from_bytes(digest[:8], "big") / 2**64
+
+
+def western_road_connection():
+    world_map = load_world_map("western_region")
+    connection = next((item for item in world_map.connections if item.id == "western_road"), None)
+    if connection is None:
+        raise ValueError("Western Road connection is unavailable")
+    return connection
 
 
 def serialize_state(save: Save) -> SaveState:
@@ -114,7 +132,11 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
             CombatEncounter.status == "active",
         )
     )
-    if active_encounter is not None and request.action in {"travel.advance", "gather.wood"}:
+    if active_encounter is not None and request.action in {
+        "travel.advance",
+        "travel.expedited",
+        "gather.wood",
+    }:
         raise ValueError("resolve the active encounter before continuing")
     prologue = json.loads(save.prologue_state)
     if request.action == "homestead.explore":
@@ -159,13 +181,84 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
         prologue["father_lead_revealed"] = True
         prologue["quest_status"] = "completed"
         result_events = [
-            {"type": "npc.dialogue", "speaker": npc["display_name"], "text": npc["dialogue"]["introduction"]},
+            {
+                "type": "npc.dialogue",
+                "speaker": npc["display_name"],
+                "text": npc["dialogue"]["introduction"],
+            },
             {"type": "story.revelation", "text": npc["dialogue"]["father_lead"]},
             {"type": "quest.completed", "quest_id": "a_fathers_shadow"},
         ]
         next_offset = save.route_offset
         next_discovered = save.discovered_locations
         next_resources = save.resources
+    elif request.action == "travel.expedited":
+        connection = western_road_connection()
+        if not prologue.get("expedited_unlocked", False) and "briarbrook" in discovered:
+            prologue["expedited_unlocked"] = True
+        if (
+            not prologue.get("expedited_unlocked", False)
+            or not connection.expedited_travel.eligible
+        ):
+            raise ValueError("expedited travel is not unlocked")
+        journey = prologue.get("expedited_journey")
+        if journey and journey.get("status") == "ambush":
+            raise ValueError("resolve the interrupted expedited journey first")
+        if save.route_offset == 0:
+            source, destination = "homestead", "briarbrook"
+        elif save.route_offset >= connection.travel_turns:
+            source, destination = "briarbrook", "homestead"
+        else:
+            raise ValueError("expedited travel is only available from a key location")
+        ambush_roll = roll_expedited_ambush(save.root_seed, source, destination, save.state_version)
+        ambush = ambush_roll < connection.expedited_travel.ambush_chance
+        waypoint_offset = max(1, connection.travel_turns // 2)
+        journey = {
+            "status": "ambush" if ambush else "completed",
+            "source": source,
+            "destination": destination,
+            "ambush_roll": ambush_roll,
+            "ambush_chance": connection.expedited_travel.ambush_chance,
+            "waypoint_offset": waypoint_offset if ambush else connection.travel_turns,
+        }
+        prologue["expedited_journey"] = journey
+        next_offset = (
+            waypoint_offset
+            if ambush
+            else (connection.travel_turns if destination == "briarbrook" else 0)
+        )
+        next_discovered = save.discovered_locations
+        next_resources = save.resources
+        result_events = [
+            {
+                "type": "travel.expedited",
+                "source": source,
+                "destination": destination,
+                "ambush": ambush,
+            }
+        ]
+        if ambush:
+            result_events.append({"type": "travel.ambush", "waypoint_offset": waypoint_offset})
+            encounter_state = start_encounter(f"{save.root_seed}:expedited:{source}:{destination}")
+            if encounter_state.turn == "enemy":
+                encounter_state = resolve_enemy_turn(encounter_state).state
+            existing_encounter = db.scalar(
+                select(CombatEncounter).where(CombatEncounter.save_id == save.id)
+            )
+            if existing_encounter is None:
+                db.add(
+                    CombatEncounter(
+                        save_id=save.id,
+                        enemy_id="goblin",
+                        status=encounter_state.status,
+                        state_json=json.dumps(asdict(encounter_state)),
+                    )
+                )
+            else:
+                existing_encounter.enemy_id = "goblin"
+                existing_encounter.status = encounter_state.status
+                existing_encounter.state_json = json.dumps(asdict(encounter_state))
+            result_events.append({"type": "combat.started", "enemy_id": "goblin"})
     elif request.action == "gather.wood":
         location_id = request.payload.get("location_id")
         result = gather_wood(discovered, json.loads(save.resources), location_id)
@@ -215,6 +308,7 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
         if tutorial_type == "traveling_merchant":
             result_events.append({"type": "tutorial.merchant"})
         if tutorial_type == "briarbrook_arrival":
+            prologue["expedited_unlocked"] = True
             result_events.append({"type": "route.arrived", "location_id": "briarbrook"})
 
     next_version = save.state_version + 1
@@ -378,10 +472,38 @@ def combat_action(db: Session, owner_id: str, save_id: str, request) -> CombatAc
     result = resolve_player_action(state, request.action)
     encounter.status = result.state.status
     encounter.state_json = json.dumps(asdict(result.state))
+    save_state = None
+    combat_events = list(result.events)
+    prologue = json.loads(save.prologue_state)
+    journey = prologue.get("expedited_journey")
+    if (
+        journey
+        and journey.get("status") == "ambush"
+        and result.state.status in {"victory", "defeat"}
+    ):
+        if result.state.status == "victory":
+            save.route_offset = (
+                load_route(save.route_id).length if journey["destination"] == "briarbrook" else 0
+            )
+            journey["status"] = "completed"
+            combat_events.append(
+                {"type": "travel.expedited.resumed", "destination": journey["destination"]}
+            )
+        else:
+            save.route_offset = 0
+            journey["status"] = "defeated"
+            combat_events.append(
+                {"type": "travel.expedited.defeated", "destination": journey["destination"]}
+            )
+        prologue["expedited_journey"] = journey
+        save.prologue_state = json.dumps(prologue, sort_keys=True)
+        save.state_version += 1
+        save_state = serialize_state(save)
     response = CombatActionResponse(
         action_id=request.action_id,
-        events=list(result.events),
+        events=combat_events,
         state=_combat_response(encounter, result.state),
+        save_state=save_state,
     )
     db.add(
         ActionReceipt(

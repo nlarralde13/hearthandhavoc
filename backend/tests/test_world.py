@@ -123,6 +123,9 @@ def test_player_world_map_filters_discovery_and_tracks_route_progress() -> None:
             "destination": "briarbrook",
             "completed_turns": 6,
             "total_turns": 20,
+            "expedited_available": False,
+            "expedited_in_progress": False,
+            "expedited_ambush_pending": False,
         }
 
         for turn in range(7, 21):

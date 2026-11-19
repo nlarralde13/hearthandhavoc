@@ -15,6 +15,8 @@ class PrologueState(BaseModel):
     adventure_started: bool
     briarbrook_contacted: bool = False
     father_lead_revealed: bool = False
+    expedited_unlocked: bool = False
+    expedited_journey: dict[str, Any] | None = None
 
 
 class ActionRequest(BaseModel):
@@ -25,6 +27,7 @@ class ActionRequest(BaseModel):
         "adventure.start",
         "npc.garrick.talk",
         "travel.advance",
+        "travel.expedited",
         "gather.wood",
     ]
     expected_state_version: int = Field(ge=1)
@@ -100,3 +103,4 @@ class CombatActionResponse(BaseModel):
     replayed: bool = False
     events: list[dict[str, Any]]
     state: CombatStateResponse
+    save_state: SaveState | None = None
