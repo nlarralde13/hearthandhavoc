@@ -18,6 +18,23 @@ def start_adventure(client: TestClient, headers: dict[str, str], save_id: str) -
     return version
 
 
+def resolve_combat(client: TestClient, headers: dict[str, str], save_id: str) -> None:
+    combat_url = f"/api/v1/saves/{save_id}/combat"
+    state = client.get(combat_url, headers=headers).json()
+    while state["status"] == "active":
+        response = client.post(
+            f"{combat_url}/actions",
+            headers=headers,
+            json={
+                "action_id": f"m3-test-combat-{state['action_index']}",
+                "action": "attack",
+                "expected_action_index": state["action_index"],
+            },
+        )
+        assert response.status_code == 200
+        state = response.json()["state"]
+
+
 def setup_function() -> None:
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
@@ -134,6 +151,67 @@ def test_m2_prologue_exploration_quest_and_adventure_are_idempotent() -> None:
         assert started.json()["state"]["route_offset"] == 0
 
 
+def test_m3_guided_route_starts_goblin_encounter_and_tracks_gathering_mastery() -> None:
+    with TestClient(app) as client:
+        headers = {"X-Dev-User-ID": "m3-user"}
+        created = client.post("/api/v1/saves", headers=headers, json={}).json()
+        version = start_adventure(client, headers, created["save_id"])
+        url = f"/api/v1/saves/{created['save_id']}/actions"
+
+        for turn in range(1, 6):
+            response = client.post(
+                url,
+                headers=headers,
+                json={
+                    "action_id": f"m3-route-{turn}",
+                    "action": "travel.advance",
+                    "expected_state_version": version,
+                    "payload": {},
+                },
+            )
+            assert response.status_code == 200
+            version = response.json()["state_version"]
+            if turn == 3:
+                assert {event["type"] for event in response.json()["events"]} >= {"tutorial.tracks"}
+            if turn == 5:
+                assert {event["type"] for event in response.json()["events"]} >= {"tutorial.goblin", "combat.started"}
+                assert client.get(
+                    f"/api/v1/saves/{created['save_id']}/combat", headers=headers
+                ).json()["status"] == "active"
+
+        resolve_combat(client, headers, created["save_id"])
+        response = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m3-route-6",
+                "action": "travel.advance",
+                "expected_state_version": version,
+                "payload": {},
+            },
+        )
+        assert response.status_code == 200
+        version = response.json()["state_version"]
+        assert "old_timberwood" in response.json()["state"]["discovered_locations"]
+
+        gathered = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m3-gather-1",
+                "action": "gather.wood",
+                "expected_state_version": version,
+                "payload": {"location_id": "old_timberwood"},
+            },
+        )
+        assert gathered.status_code == 200
+        assert gathered.json()["state"]["resources"] == {"wood": 3}
+        assert gathered.json()["state"]["mastery"] == {"logging": 3}
+        assert {event["type"] for event in gathered.json()["events"]} == {
+            "gathering.completed", "mastery.gained"
+        }
+
+
 def test_saves_are_owned_by_the_authenticated_actor() -> None:
     with TestClient(app) as client:
         created = client.post(
@@ -180,6 +258,8 @@ def test_map_hides_undiscovered_waypoint_identity() -> None:
                 ).status_code
                 == 200
             )
+            if turn == 5:
+                resolve_combat(client, headers, created["save_id"])
 
         discovered = client.get(f"/api/v1/saves/{created['save_id']}/map", headers=headers).json()
         assert discovered["waypoints"][0] == {
@@ -221,6 +301,8 @@ def test_gathering_requires_discovery_and_is_idempotent() -> None:
                     "payload": {},
                 },
             ).json()["state"]
+            if turn == 5:
+                resolve_combat(client, headers, created["save_id"])
 
         command = {
             "action_id": "gather-wood-1",

@@ -54,6 +54,7 @@ def serialize_state(save: Save) -> SaveState:
         route_offset=save.route_offset,
         discovered_locations=json.loads(save.discovered_locations),
         resources=json.loads(save.resources),
+        mastery=json.loads(save.mastery),
     )
 
 
@@ -106,6 +107,15 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
         )
 
     discovered = frozenset(json.loads(save.discovered_locations))
+    mastery = json.loads(save.mastery)
+    active_encounter = db.scalar(
+        select(CombatEncounter).where(
+            CombatEncounter.save_id == save.id,
+            CombatEncounter.status == "active",
+        )
+    )
+    if active_encounter is not None and request.action in {"travel.advance", "gather.wood"}:
+        raise ValueError("resolve the active encounter before continuing")
     prologue = json.loads(save.prologue_state)
     if request.action == "homestead.explore":
         if prologue["stranger_met"]:
@@ -142,7 +152,9 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
         next_offset = save.route_offset
         next_discovered = save.discovered_locations
         next_resources = json.dumps(result.resources, sort_keys=True)
+        mastery["logging"] = mastery.get("logging", 0) + 3
         result_events = list(result.events)
+        result_events.append({"type": "mastery.gained", "skill": "logging", "amount": 3})
     else:
         if not prologue["adventure_started"]:
             raise ValueError("begin A Father's Shadow before traveling")
@@ -153,6 +165,37 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
         next_discovered = json.dumps(sorted(result.state.discovered))
         next_resources = save.resources
         result_events = list(result.events)
+        tutorial_events = {
+            event["offset"]: event["type"]
+            for event in load_route_record(save.route_id).get("tutorial_events", [])
+        }
+        tutorial_type = tutorial_events.get(result.state.offset)
+        if tutorial_type == "unusual_tracks":
+            result_events.append({"type": "tutorial.tracks"})
+        if tutorial_type == "goblin_highwayman":
+            result_events.append({"type": "tutorial.goblin"})
+            existing_encounter = db.scalar(
+                select(CombatEncounter).where(CombatEncounter.save_id == save.id)
+            )
+            if existing_encounter is None:
+                encounter_state = start_encounter(f"{save.root_seed}:goblin:{save.state_version}")
+                if encounter_state.turn == "enemy":
+                    encounter_state = resolve_enemy_turn(encounter_state).state
+                db.add(
+                    CombatEncounter(
+                        save_id=save.id,
+                        enemy_id="goblin",
+                        status=encounter_state.status,
+                        state_json=json.dumps(asdict(encounter_state)),
+                    )
+                )
+                result_events.append({"type": "combat.started", "enemy_id": "goblin"})
+        if tutorial_type == "weathered_landmark":
+            result_events.append({"type": "tutorial.landmark"})
+        if tutorial_type == "traveling_merchant":
+            result_events.append({"type": "tutorial.merchant"})
+        if tutorial_type == "briarbrook_arrival":
+            result_events.append({"type": "route.arrived", "location_id": "briarbrook"})
 
     next_version = save.state_version + 1
     updated = db.execute(
@@ -166,6 +209,7 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
             route_offset=next_offset,
             discovered_locations=next_discovered,
             resources=next_resources,
+            mastery=json.dumps(mastery, sort_keys=True),
             prologue_state=json.dumps(prologue, sort_keys=True),
             state_version=next_version,
         )
@@ -191,6 +235,7 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
     save.route_offset = next_offset
     save.discovered_locations = next_discovered
     save.resources = next_resources
+    save.mastery = json.dumps(mastery, sort_keys=True)
     save.prologue_state = json.dumps(prologue, sort_keys=True)
     save.state_version = next_version
     response = ActionResponse(

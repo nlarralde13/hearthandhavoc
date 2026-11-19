@@ -3,6 +3,15 @@
   "route_id": "western_road",
   "display_name": "Western Road",
   "length": 20,
+  "tutorial_events": [
+    {"offset": 1, "type": "begin_travel"},
+    {"offset": 3, "type": "unusual_tracks"},
+    {"offset": 5, "type": "goblin_highwayman"},
+    {"offset": 6, "type": "old_timberwood_discovery"},
+    {"offset": 12, "type": "weathered_landmark"},
+    {"offset": 16, "type": "traveling_merchant"},
+    {"offset": 20, "type": "briarbrook_arrival"}
+  ],
   "waypoints": [
     {
       "location_id": "old_timberwood",

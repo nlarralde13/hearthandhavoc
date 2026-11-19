@@ -12,23 +12,24 @@ features.
   starting equipment, and the initial homestead floor plan.
 - **M2 complete:** opening narrative, one-time Explore Grounds encounter,
   A Father's Shadow activation, and guided-adventure selection.
-- **Next:** M3 guided Western Road travel with fixed tutorial events, the first
-  combat encounter, Old Timberwood discovery, and manual gathering.
+- **M3 complete:** versioned Western Road tutorial events, Goblin Highwayman
+  interruption, Old Timberwood discovery, manual gathering, and logging mastery.
+- **Next:** M4 Briarbrook arrival, the father's-history NPC conversation, and
+  authored/Qwen-fallback narrative progression.
 
 ## Recommended order
 
-### 1. Implement the guided adventure vertical slice
+### 1. Implement Briarbrook narrative payoff
 
 Extend the existing prologue with versioned content and server-authoritative
 progress for:
 
-- the 20-turn Western Road;
-- the fixed stranger/tutorial route events;
-- Goblin Highwayman combat;
-- Old Timberwood discovery and gathering.
+- arrival at Briarbrook;
+- the designated NPC conversation;
+- the first meaningful revelation about the player's father;
+- quest progression and authored fallback dialogue.
 
-Keep route progress separate from global activity turns, and keep all rewards,
-combat results, discoveries, and quest progress authoritative on the backend.
+Keep all story flags and quest progression authoritative on the backend.
 
 ### 2. Add the homestead quest vertical slice
 

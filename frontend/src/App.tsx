@@ -21,6 +21,7 @@ type SaveState = {
   route_offset: number;
   discovered_locations: string[];
   resources: Record<string, number>;
+  mastery: Record<string, number>;
 };
 
 type HomesteadState = {
@@ -32,7 +33,7 @@ type ActionResponse = {
   action_id: string;
   state_version: number;
   replayed: boolean;
-  events: Array<{ type: string; location_id?: string; offset?: number }>;
+  events: Array<{ type: string; location_id?: string; offset?: number; skill?: string; amount?: number; resource?: string }>;
   state: SaveState;
 };
 
@@ -118,11 +119,18 @@ function eventClass(message: string): string {
   return "normal";
 }
 
-function formatGameEvent(event: { type: string; location_id?: string; offset?: number; quest_id?: string }, turn: number): string {
+function formatGameEvent(event: { type: string; location_id?: string; offset?: number; quest_id?: string; skill?: string; amount?: number; resource?: string }, turn: number): string {
   if (event.type === "stranger.appears") return "NARRATIVE // A mysterious stranger recognizes your family name.";
   if (event.type === "quest.offered") return "QUEST // A Father's Shadow is waiting for your answer.";
   if (event.type === "quest.accepted") return "QUEST // Accepted: A Father's Shadow. Briarbrook holds the next lead.";
   if (event.type === "adventure.started") return "SYSTEM // WESTERN ROAD GUIDANCE ACTIVE · DESTINATION BRIARBROOK";
+  if (event.type === "tutorial.tracks") return "[Turn 3] You find unusual tracks crossing the road. Something is following the old route.";
+  if (event.type === "tutorial.goblin") return "[Turn 5] A Goblin Highwayman blocks the Western Road.";
+  if (event.type === "tutorial.landmark") return "[Turn 12] A weathered milestone marks the fork ahead. The road continues west.";
+  if (event.type === "tutorial.merchant") return "[Turn 16] A traveling merchant waves from a creaking cart.";
+  if (event.type === "route.arrived") return "[Turn 20] Briarbrook appears beyond the hedgerows. The Western Road is complete.";
+  if (event.type === "gathering.completed") return `[Turn ${turn}] You collected ${event.amount ?? 0} Common Wood from Old Timberwood.`;
+  if (event.type === "mastery.gained") return `[Mastery] ${event.skill ?? "Logging"} +${event.amount ?? 0} XP.`;
   if (event.type === "location.discovered") return `[Turn ${event.offset ?? turn}] Discovered: ${event.location_id}.`;
   if (event.type === "travel.advanced") return `[Turn ${event.offset ?? turn}] You continue west along the old road.`;
   return `[Turn ${turn}] ${event.type.replace(/\./g, " ")}.`;
@@ -268,6 +276,12 @@ function GameApp() {
       const foundSomething = response.events.some((event) => event.type !== "travel.advanced");
       if (foundSomething || response.state.route_offset >= (routeMap?.length ?? 20)) setAutoTravel(false);
       appendEvents(response.events.map((event) => formatGameEvent(event, response.state.route_offset)));
+      if (response.events.some((event) => event.type === "combat.started")) {
+        const activeCombat = await request<CombatState>(`/api/v1/saves/${response.state.save_id}/combat`);
+        setCombat(activeCombat);
+        setAutoTravel(false);
+        setEncounterOpen(true);
+      }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to advance travel.");
     } finally {
@@ -304,7 +318,7 @@ function GameApp() {
         body: JSON.stringify({ action_id: actionId(), action: "gather.wood", expected_state_version: state.state_version, payload: { location_id: "old_timberwood" } }),
       });
       setState(response.state);
-      appendEvents(`[Turn ${response.state.route_offset}] You collected 3 Wood from Old Timberwood.`.split("\n"));
+      appendEvents(response.events.map((event) => formatGameEvent(event, response.state.route_offset)));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to gather wood.");
     } finally {
@@ -423,7 +437,6 @@ function GameApp() {
         ...(state?.prologue.quest_status === "active" && !state.prologue.adventure_started ? [{ id: "adventure", label: "Head Out on Adventure", icon: "➜", enabled: !busy, run: () => void runPrologueAction("adventure.start") }] : []),
         ...(state?.prologue.adventure_started ? [{ id: "travel", label: "Advance", icon: "➜", enabled: Boolean(state) && !busy && state?.route_offset !== routeMap?.length, run: () => void advanceTravel() }] : []),
         { id: "gather", label: "Gather wood", icon: "❖", enabled: Boolean(state?.discovered_locations.includes("old_timberwood")) && !busy, hint: "Gather wood at Old Timberwood.", run: () => void gatherWood() },
-        ...(state?.discovered_locations.includes("old_timberwood") && !combat ? [{ id: "encounter", label: "Face goblin", icon: "⚔", enabled: !busy, run: () => void beginCombat() }] : []),
         { id: "craft", label: "Craft", icon: "◆", enabled: false, hint: "Crafting is not implemented yet." },
       ];
 

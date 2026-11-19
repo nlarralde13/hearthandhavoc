@@ -49,6 +49,22 @@ def validate_route_record(record: Any, route_id: str) -> dict[str, Any]:
             raise ContentError(f"route waypoint data is invalid: {route_id}")
         offsets.add(offset)
         location_ids.add(location_id)
+    tutorial_events = record.get("tutorial_events", [])
+    tutorial_offsets: set[int] = set()
+    if not isinstance(tutorial_events, list):
+        raise ContentError(f"route tutorial events are invalid: {route_id}")
+    for event in tutorial_events:
+        if (
+            not isinstance(event, dict)
+            or not isinstance(event.get("offset"), int)
+            or event["offset"] < 1
+            or event["offset"] > record["length"]
+            or not isinstance(event.get("type"), str)
+            or not event["type"]
+            or event["offset"] in tutorial_offsets
+        ):
+            raise ContentError(f"route tutorial event data is invalid: {route_id}")
+        tutorial_offsets.add(event["offset"])
     return record
 
 

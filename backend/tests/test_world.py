@@ -11,6 +11,23 @@ def setup_function() -> None:
     Base.metadata.create_all(bind=engine)
 
 
+def resolve_combat(client: TestClient, headers: dict[str, str], save_id: str) -> None:
+    combat_url = f"/api/v1/saves/{save_id}/combat"
+    state = client.get(combat_url, headers=headers).json()
+    while state["status"] == "active":
+        response = client.post(
+            f"{combat_url}/actions",
+            headers=headers,
+            json={
+                "action_id": f"map-test-combat-{state['action_index']}",
+                "action": "attack",
+                "expected_action_index": state["action_index"],
+            },
+        )
+        assert response.status_code == 200
+        state = response.json()["state"]
+
+
 def test_sample_world_preserves_western_road_waypoint() -> None:
     maps = {world_map.id: world_map for world_map in list_world_maps()}
     western = maps["western_region"]
@@ -93,6 +110,8 @@ def test_player_world_map_filters_discovery_and_tracks_route_progress() -> None:
             )
             assert response.status_code == 200
             version = response.json()["state_version"]
+            if turn == 5:
+                resolve_combat(client, headers, save["save_id"])
 
         timberwood = client.get(map_url, headers=headers).json()
         assert {node["id"] for node in timberwood["nodes"]} == {

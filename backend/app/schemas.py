@@ -43,6 +43,7 @@ class SaveState(BaseModel):
     route_offset: int
     discovered_locations: list[str]
     resources: dict[str, int]
+    mastery: dict[str, int]
 
 
 class RouteWaypointView(BaseModel):
