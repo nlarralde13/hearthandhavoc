@@ -36,6 +36,33 @@ Every state-changing command includes:
 Commands execute in one database transaction. A repeated action ID returns its
 stored receipt. A stale state version returns a conflict requiring refresh.
 
+## Frontend interaction architecture
+
+The browser is organized as a persistent game console with five navigation
+destinations: Journal, World Map, Home, Character, and Inventory. Home is the
+default terminal view. It renders a session event stream and contextual
+commands; it does not own a second copy of route, quest, inventory, or combat
+state.
+
+The frontend interaction boundaries are:
+
+- **Home terminal:** renders system, narrative, travel, discovery, gathering,
+  and combat messages. It may format authoritative response events for display,
+  but it cannot create rewards, rolls, or progression.
+- **Gamepad:** invokes only existing validated commands and disables commands
+  that are unavailable in the current state.
+- **Encounter overlay:** presents an existing active `CombatEncounter` and sends
+  combat actions. Mounting the overlay never starts combat.
+- **World Map:** presents the authoritative route graph and discovered location
+  identities. Its grid is a visual layout layer, not a new geography engine.
+- **Journal:** presents quest definitions and progress records once those
+  backend models exist. It is intentionally separate from the Home terminal
+  transcript.
+
+Terminal output is currently session-local because the backend does not yet
+persist a player event history. A future event-history read model may be added
+only when its retention, pagination, privacy, and growth behavior are defined.
+
 ## Canonical content
 
 Routes and their waypoints live in versioned `game_data/` records and are
@@ -76,4 +103,6 @@ before public production exposure.
 
 WebSockets, microservices, autonomous NPCs, offline gathering, and mandatory
 LLM inference are explicitly deferred until the vertical slice demonstrates a
-need for them.
+need for them. Quest persistence, structured terminal history, and richer map
+visibility are gameplay/content work, not reasons to introduce a new runtime
+service.

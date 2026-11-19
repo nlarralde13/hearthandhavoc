@@ -7,8 +7,11 @@ resources, forge nails, and repair the homestead door.
 
 ## Development status
 
-The repository is currently at M0/M1 foundation work. The initial implementation
-will use a modular monolith:
+The repository is currently at the deterministic vertical-slice stage. The
+frontend direction is a terminal-first game console: Home is live narrative
+output, World Map owns routes, Journal owns quests, Character owns progression,
+Inventory owns carried items, and active combat appears in a temporary overlay.
+The implementation remains a modular monolith:
 
 - React + TypeScript frontend
 - FastAPI + Pydantic backend

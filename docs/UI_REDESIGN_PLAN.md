@@ -1,30 +1,80 @@
-# Hearth & Havoc UI redesign plan
+# Hearth & Havoc UI direction
 
-The supplied `hearth&havoc-mockup.png` is the visual reference for the browser
-game console. It is an art-direction reference, not a pixel-perfect target.
+Updated 2026-11-19.
 
-## Phase 1: console shell
+The supplied `hearth&havoc-mockup.png` remains the visual reference for the
+browser game console. It is an art-direction reference, not a pixel-perfect
+target.
 
-- Add one centered, persistent console frame around the existing game view.
-- Keep the current save loading, travel, gathering, combat, and reset handlers.
-- Add a persistent status header using only data currently available to the API.
-- Add an explicit command-bar integration point without fabricating conversation
-  responses before a conversation API exists.
-- Add contextual action definitions and a lower action panel.
-- Add in-session Journal, World Map, Home, Character, and Inventory tabs with a
-  single active state; use intentional empty states for data not implemented.
+## Current direction: terminal-first game console
 
-## Phase 2: home view
+Hearth & Havoc is presented as a persistent medieval digital terminal rather
+than a dashboard of simultaneous gameplay cards. The player should feel as if
+they are entering an old world through a deliberate, self-aware interface:
 
-- Move the existing narrative, event log, route context, gathering, and combat
-  into the console's scene, narrative, and context regions.
-- Add scene artwork only after selecting a consistent asset pipeline.
+- Home is one continuous event terminal for narrative, system messages, travel,
+  discoveries, gathering, and combat results.
+- The terminal uses readable retro typography, dark matte surfaces, parchment
+  text, antique gold, muted green, restrained red, and blue-gray system text.
+- There are no eyebrow labels in the interface unless explicitly requested.
+- The console fits the browser viewport; the page itself should not require
+  scrolling on normal desktop resolutions. Logs and specialist panels scroll
+  internally where necessary.
+- The contextual Gamepad is the only persistent command surface on Home.
+- Encounter controls appear in a temporary overlay while combat is active.
+- The World Map owns route presentation and geographic context.
+- The Journal owns quests, objectives, lore, and story history; it is not a
+  duplicate of the Home terminal.
+- Character and Inventory own their respective summaries and future detail
+  views.
 
-## Phase 3: supporting panels and polish
+## Screen responsibilities
 
-- Replace empty states with real journal, character, and inventory read models.
-- Refine responsive behavior, keyboard interaction, independent scrolling, and
-  visual details at 1920x1080 and 1366x768.
+| Screen | Owns | Does not own |
+| --- | --- | --- |
+| Home | live narrative terminal, system messages, current context, Gamepad | route cards, quest history, permanent encounter panels |
+| World Map | region grid, known locations, roads, route progress, discovery context | combat controls, quest history |
+| Journal | active/completed quests, objectives, lore, story history | live terminal transcript |
+| Character | attributes, skills, mastery, equipment | travel or inventory mutations |
+| Inventory | carried items, equipment, capacity/weight | route navigation or quest history |
+| Encounter overlay | temporary combat state and combat actions | persistent navigation or automatic combat initiation |
 
-The redesign must not add gameplay rules, reset saves, or change production
-deployment behavior.
+The five persistent navigation destinations remain, in order:
+`Journal | World Map | Home | Character | Inventory`. Home stays centered.
+Switching destinations must not advance turns, mutate saves, or reset state.
+
+## Current implementation status
+
+- Terminal-first Home view is implemented.
+- System and narrative bootstrap messages are shown when a save is created or
+  resumed.
+- Travel, discovery, gathering, and combat results are adapted into terminal
+  messages.
+- The terminal scrolls independently and offers a jump-to-latest control when
+  the player is reading older output.
+- World Map has a presentation-only grid with known route markers. It does not
+  replace the authoritative route graph or add fog-of-war rules.
+- Encounter state opens in a temporary overlay and remains dismissible after
+  resolution.
+- Journal is a quest-tracker view with intentional empty states until quest
+  definitions and progress records exist.
+- The Gamepad exposes only existing handlers; disabled commands do not mutate
+  the backend.
+- Terminal history is currently session-local. The backend does not yet expose
+  a persisted event history, so reload restores save state plus bootstrap
+  messages rather than the complete transcript.
+
+## Future UI work
+
+1. Add real quest definitions and progress read models, then populate Journal.
+2. Replace hardcoded map presentation coordinates with versioned UI coordinates
+   attached to canonical location content, without changing route distances.
+3. Add a structured terminal-event adapter backed by authoritative event data so
+   message formatting does not depend on reconstructing state from totals.
+4. Add scene/location art only after the asset style and licensing path are
+   decided.
+5. Validate keyboard behavior, independent scrolling, mobile wrapping, and
+   visual details at 1366x768 and 1920x1080 with a browser-capable test host.
+
+The UI must not add gameplay rules, grant rewards, reset saves, or change
+production deployment behavior.
