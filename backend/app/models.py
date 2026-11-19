@@ -32,7 +32,9 @@ class Save(Base):
         default=(
             '{"rooms": [{"id": "main_room", "type": "shack", "grid_x": 0, '
             '"grid_y": 0, "width": 1, "height": 1, "condition": "dilapidated", '
-            '"upgrades": {"front_door": "broken"}}], "front_door": "broken"}'
+            '"upgrades": {"front_door": "broken"}}], "front_door": "broken", '
+            '"storage": {"wood": 0, "iron_ore": 12, "iron_nails": 0}, '
+            '"materials_initialized": true}'
         ),
     )
     prologue_state: Mapped[str] = mapped_column(

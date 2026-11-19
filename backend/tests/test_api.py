@@ -56,6 +56,7 @@ def test_create_load_and_replay_travel() -> None:
         assert created["attributes"] == {"agility": 8, "endurance": 10, "intellect": 8, "might": 14}
         assert created["equipment"] == ["Forge Hammer", "Nailed Scrap Board", "Blacksmith's Apron"]
         assert created["homestead"]["front_door"] == "broken"
+        assert created["homestead"]["storage"]["iron_ore"] == 12
         start_adventure(client, headers, created["save_id"])
 
         command = {
@@ -131,6 +132,7 @@ def test_m2_prologue_exploration_quest_and_adventure_are_idempotent() -> None:
             "father_lead_revealed": False,
             "expedited_unlocked": False,
             "expedited_journey": None,
+            "homestead_repaired": False,
         }
         assert [event["type"] for event in explore.json()["events"]] == [
             "stranger.appears",
@@ -261,6 +263,7 @@ def test_m4_briarbrook_conversation_reveals_father_lead_and_completes_quest() ->
             "father_lead_revealed": True,
             "expedited_unlocked": True,
             "expedited_journey": None,
+            "homestead_repaired": False,
         }
         assert [event["type"] for event in talk.json()["events"]] == [
             "npc.dialogue",
@@ -400,6 +403,158 @@ def test_m5_expedited_travel_is_bidirectional_and_persists_one_ambush_roll(monke
         resumed = client.get(f"/api/v1/saves/{created['save_id']}/state", headers=headers).json()
         assert resumed["route_offset"] == 0
         assert resumed["prologue"]["expedited_journey"]["status"] == "completed"
+
+
+def test_m6_material_deposit_crafting_and_door_repair_are_persistent(monkeypatch) -> None:
+    with TestClient(app) as client:
+        headers = {"X-Dev-User-ID": "m6-user"}
+        created = client.post("/api/v1/saves", headers=headers, json={}).json()
+        version = start_adventure(client, headers, created["save_id"])
+        url = f"/api/v1/saves/{created['save_id']}/actions"
+
+        for turn in range(1, 21):
+            response = client.post(
+                url,
+                headers=headers,
+                json={
+                    "action_id": f"m6-route-{turn}",
+                    "action": "travel.advance",
+                    "expected_state_version": version,
+                    "payload": {},
+                },
+            )
+            assert response.status_code == 200
+            version = response.json()["state_version"]
+            if turn == 5:
+                resolve_combat(client, headers, created["save_id"])
+
+        for gather_index in range(4):
+            gathered = client.post(
+                url,
+                headers=headers,
+                json={
+                    "action_id": f"m6-gather-{gather_index}",
+                    "action": "gather.wood",
+                    "expected_state_version": version,
+                    "payload": {"location_id": "old_timberwood"},
+                },
+            )
+            assert gathered.status_code == 200
+            version = gathered.json()["state_version"]
+
+        monkeypatch.setattr("app.services.roll_expedited_ambush", lambda *args: 0.9)
+        returned = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m6-return-home",
+                "action": "travel.expedited",
+                "expected_state_version": version,
+                "payload": {},
+            },
+        )
+        assert returned.status_code == 200
+        version = returned.json()["state_version"]
+        assert returned.json()["state"]["route_offset"] == 0
+
+        deposited = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m6-deposit",
+                "action": "homestead.deposit",
+                "expected_state_version": version,
+                "payload": {},
+            },
+        )
+        assert deposited.status_code == 200
+        version = deposited.json()["state_version"]
+        assert deposited.json()["state"]["resources"]["wood"] == 0
+        assert deposited.json()["state"]["homestead"]["storage"]["wood"] == 12
+
+        crafted = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m6-craft-nails",
+                "action": "craft.iron_nails",
+                "expected_state_version": version,
+                "payload": {"quantity": 3},
+            },
+        )
+        assert crafted.status_code == 200
+        version = crafted.json()["state_version"]
+        assert crafted.json()["state"]["homestead"]["storage"] == {
+            "wood": 12, "iron_ore": 6, "iron_nails": 3
+        }
+
+        insufficient = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m6-repair-too-soon",
+                "action": "homestead.repair_door",
+                "expected_state_version": version,
+                "payload": {},
+            },
+        )
+        assert insufficient.status_code == 422
+
+        crafted_more = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m6-craft-more-nails",
+                "action": "craft.iron_nails",
+                "expected_state_version": version,
+                "payload": {"quantity": 3},
+            },
+        )
+        assert crafted_more.status_code == 200
+        version = crafted_more.json()["state_version"]
+
+        repaired = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m6-repair-door",
+                "action": "homestead.repair_door",
+                "expected_state_version": version,
+                "payload": {},
+            },
+        )
+        assert repaired.status_code == 200
+        assert repaired.json()["state"]["homestead"]["front_door"] == "repaired"
+        assert repaired.json()["state"]["homestead"]["rooms"][0]["upgrades"]["front_door"] == "repaired"
+        assert repaired.json()["state"]["prologue"]["homestead_repaired"] is True
+        assert repaired.json()["state"]["homestead"]["storage"] == {
+            "wood": 2, "iron_ore": 0, "iron_nails": 0
+        }
+
+        replay = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m6-repair-door",
+                "action": "homestead.repair_door",
+                "expected_state_version": version + 1,
+                "payload": {},
+            },
+        )
+        assert replay.status_code == 200
+        assert replay.json()["replayed"] is True
+
+        duplicate = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m6-repair-door-again",
+                "action": "homestead.repair_door",
+                "expected_state_version": repaired.json()["state_version"],
+                "payload": {},
+            },
+        )
+        assert duplicate.status_code == 422
 
 
 def test_saves_are_owned_by_the_authenticated_actor() -> None:

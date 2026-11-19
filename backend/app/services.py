@@ -56,6 +56,16 @@ def western_road_connection():
     return connection
 
 
+def homestead_material_state(save: Save) -> dict:
+    homestead = json.loads(save.homestead)
+    storage = homestead.setdefault("storage", {})
+    storage.setdefault("wood", 0)
+    storage.setdefault("iron_ore", 12)
+    storage.setdefault("iron_nails", 0)
+    homestead.setdefault("materials_initialized", True)
+    return homestead
+
+
 def serialize_state(save: Save) -> SaveState:
     return SaveState(
         save_id=save.id,
@@ -139,6 +149,7 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
     }:
         raise ValueError("resolve the active encounter before continuing")
     prologue = json.loads(save.prologue_state)
+    next_homestead = save.homestead
     if request.action == "homestead.explore":
         if prologue["stranger_met"]:
             raise ValueError("the grounds have already been explored")
@@ -268,6 +279,70 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
         mastery["logging"] = mastery.get("logging", 0) + 3
         result_events = list(result.events)
         result_events.append({"type": "mastery.gained", "skill": "logging", "amount": 3})
+    elif request.action in {"homestead.deposit", "craft.iron_nails", "homestead.repair_door"}:
+        if save.route_offset != 0:
+            raise ValueError("homestead materials can only be managed at home")
+        next_offset = save.route_offset
+        next_discovered = save.discovered_locations
+        homestead = homestead_material_state(save)
+        storage = homestead["storage"]
+        resources = json.loads(save.resources)
+        for material in ("wood", "iron_ore", "iron_nails"):
+            resources.setdefault(material, 0)
+            storage.setdefault(material, 0)
+        if request.action == "homestead.deposit":
+            deposited = {
+                material: resources[material] for material in resources if material in storage
+            }
+            if not any(deposited.values()):
+                raise ValueError("there are no materials to deposit")
+            for material, amount in deposited.items():
+                storage[material] += amount
+                resources[material] = 0
+            next_resources = json.dumps(resources, sort_keys=True)
+            result_events = [{"type": "materials.deposited", "materials": deposited}]
+        elif request.action == "craft.iron_nails":
+            quantity = request.payload.get("quantity", 1)
+            if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity < 1:
+                raise ValueError("nail quantity must be a positive integer")
+            if storage["iron_ore"] < quantity * 2:
+                raise ValueError("not enough Iron Ore to forge that many Iron Nails")
+            storage["iron_ore"] -= quantity * 2
+            storage["iron_nails"] += quantity
+            next_resources = save.resources
+            result_events = [
+                    {
+                        "type": "crafting.completed",
+                        "item": "Iron Nails",
+                        "quantity": quantity,
+                        "ore_used": quantity * 2,
+                    }
+            ]
+        else:
+            if homestead.get("front_door") == "repaired":
+                raise ValueError("the front door is already repaired")
+            if storage["wood"] < 10 or storage["iron_nails"] < 6:
+                raise ValueError(
+                    "repairing the front door requires 10 Common Wood and 6 Iron Nails"
+                )
+            storage["wood"] -= 10
+            storage["iron_nails"] -= 6
+            homestead["front_door"] = "repaired"
+            for room in homestead.get("rooms", []):
+                upgrades = room.setdefault("upgrades", {})
+                upgrades["front_door"] = "repaired"
+            prologue["homestead_repaired"] = True
+            next_resources = save.resources
+            result_events = [
+                    {
+                        "type": "construction.completed",
+                        "structure": "front_door",
+                        "wood_used": 10,
+                        "nails_used": 6,
+                    },
+                {"type": "milestone.completed", "milestone": "first_homestead_improvement"},
+            ]
+        next_homestead = json.dumps(homestead, sort_keys=True)
     else:
         if not prologue["adventure_started"]:
             raise ValueError("begin A Father's Shadow before traveling")
@@ -321,6 +396,7 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
         )
         .values(
             route_offset=next_offset,
+            homestead=next_homestead,
             discovered_locations=next_discovered,
             resources=next_resources,
             mastery=json.dumps(mastery, sort_keys=True),
@@ -347,6 +423,7 @@ def perform_action(db: Session, owner_id: str, save_id: str, request) -> ActionR
         )
 
     save.route_offset = next_offset
+    save.homestead = next_homestead
     save.discovered_locations = next_discovered
     save.resources = next_resources
     save.mastery = json.dumps(mastery, sort_keys=True)

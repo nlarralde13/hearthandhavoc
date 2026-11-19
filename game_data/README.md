@@ -4,7 +4,7 @@ This directory will contain canonical, versioned definitions for items,
 enemies, skills, locations, routes, recipes, quests, NPCs, and world maps.
 
 World graph fixtures are under `world/maps/`, and authored NPC definitions are
-under `npcs/`. The development World Graph
+under `npcs/`, and versioned quest definitions under `quests/`. The development World Graph
 Editor can create persistent overrides without modifying these canonical files
 directly; promote reviewed changes through Git.
 

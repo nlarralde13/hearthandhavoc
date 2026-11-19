@@ -78,8 +78,30 @@ def validate_npc_record(record: Any, npc_id: str) -> dict[str, Any]:
     if not isinstance(record.get("location_id"), str) or not record["location_id"]:
         raise ContentError(f"npc location is invalid: {npc_id}")
     dialogue = record.get("dialogue")
-    if not isinstance(dialogue, dict) or not all(isinstance(value, str) and value for value in dialogue.values()):
+    if not isinstance(dialogue, dict) or not all(
+        isinstance(value, str) and value for value in dialogue.values()
+    ):
         raise ContentError(f"npc dialogue is invalid: {npc_id}")
+    return record
+
+
+def validate_quest_record(record: Any, quest_id: str) -> dict[str, Any]:
+    if not isinstance(record, dict) or record.get("quest_id") != quest_id:
+        raise ContentError(f"quest content ID does not match filename: {quest_id}")
+    if not isinstance(record.get("content_version"), str) or not record["content_version"]:
+        raise ContentError(f"quest content version is invalid: {quest_id}")
+    if not isinstance(record.get("title"), str) or not record["title"]:
+        raise ContentError(f"quest title is invalid: {quest_id}")
+    objectives = record.get("objectives")
+    if not isinstance(objectives, list) or not objectives:
+        raise ContentError(f"quest objectives are invalid: {quest_id}")
+    for objective in objectives:
+        if (
+            not isinstance(objective, dict)
+            or not isinstance(objective.get("id"), str)
+            or not objective.get("id")
+        ):
+            raise ContentError(f"quest objective is invalid: {quest_id}")
     return record
 
 
@@ -104,6 +126,16 @@ def load_npc_record(npc_id: str) -> dict[str, Any]:
     return validate_npc_record(record, npc_id)
 
 
+@lru_cache
+def load_quest_record(quest_id: str) -> dict[str, Any]:
+    path = CONTENT_ROOT / "quests" / f"{quest_id}.json"
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        raise ContentError(f"quest content is unavailable: {quest_id}") from exc
+    return validate_quest_record(record, quest_id)
+
+
 def validate_all_content(content_root: Path = CONTENT_ROOT) -> list[str]:
     route_paths = sorted((content_root / "routes").glob("*.json"))
     if not route_paths:
@@ -123,6 +155,12 @@ def validate_all_content(content_root: Path = CONTENT_ROOT) -> list[str]:
         except (OSError, json.JSONDecodeError) as exc:
             raise ContentError(f"cannot read npc content: {path.name}") from exc
         validate_npc_record(record, path.stem)
+    for path in sorted((content_root / "quests").glob("*.json")):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ContentError(f"cannot read quest content: {path.name}") from exc
+        validate_quest_record(record, path.stem)
     return route_ids
 
 

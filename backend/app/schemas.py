@@ -17,6 +17,7 @@ class PrologueState(BaseModel):
     father_lead_revealed: bool = False
     expedited_unlocked: bool = False
     expedited_journey: dict[str, Any] | None = None
+    homestead_repaired: bool = False
 
 
 class ActionRequest(BaseModel):
@@ -29,6 +30,9 @@ class ActionRequest(BaseModel):
         "travel.advance",
         "travel.expedited",
         "gather.wood",
+        "homestead.deposit",
+        "craft.iron_nails",
+        "homestead.repair_door",
     ]
     expected_state_version: int = Field(ge=1)
     payload: dict[str, Any] = Field(default_factory=dict)

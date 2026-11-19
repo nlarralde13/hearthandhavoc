@@ -1,0 +1,13 @@
+{
+  "content_version": "0.1.0",
+  "quest_id": "the_kings_generosity",
+  "title": "The King's Generosity",
+  "category": "homestead",
+  "description": "The King's grant came with a roof, walls, and a door that has given up on all three concepts.",
+  "objectives": [
+    {"id": "common_wood", "label": "Obtain 10 Common Wood", "required": 10},
+    {"id": "iron_nails", "label": "Obtain or forge 6 Iron Nails", "required": 6},
+    {"id": "repair_front_door", "label": "Repair the homestead front door", "required": 1}
+  ],
+  "reward": "First Homestead Improvement"
+}
