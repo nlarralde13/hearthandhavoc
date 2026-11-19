@@ -428,6 +428,18 @@ def test_m6_material_deposit_crafting_and_door_repair_are_persistent(monkeypatch
             if turn == 5:
                 resolve_combat(client, headers, created["save_id"])
 
+        away_action = client.post(
+            url,
+            headers=headers,
+            json={
+                "action_id": "m6-away-repair",
+                "action": "homestead.repair_door",
+                "expected_state_version": version,
+                "payload": {},
+            },
+        )
+        assert away_action.status_code == 422
+
         for gather_index in range(4):
             gathered = client.post(
                 url,
@@ -525,7 +537,10 @@ def test_m6_material_deposit_crafting_and_door_repair_are_persistent(monkeypatch
         )
         assert repaired.status_code == 200
         assert repaired.json()["state"]["homestead"]["front_door"] == "repaired"
-        assert repaired.json()["state"]["homestead"]["rooms"][0]["upgrades"]["front_door"] == "repaired"
+        assert (
+            repaired.json()["state"]["homestead"]["rooms"][0]["upgrades"]["front_door"]
+            == "repaired"
+        )
         assert repaired.json()["state"]["prologue"]["homestead_repaired"] is True
         assert repaired.json()["state"]["homestead"]["storage"] == {
             "wood": 2, "iron_ore": 0, "iron_nails": 0

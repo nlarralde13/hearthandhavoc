@@ -1,6 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import WorldEditor from "./WorldEditor";
 import PlayerWorldMap from "./PlayerWorldMap";
+import HomesteadView from "./HomesteadView";
 
 type SaveState = {
   save_id: string;
@@ -75,7 +76,7 @@ type CombatActionResponse = {
   save_state?: SaveState;
 };
 
-type TabId = "journal" | "map" | "home" | "character" | "inventory";
+type TabId = "journal" | "map" | "console" | "character" | "inventory" | "homestead";
 
 type ActionDefinition = {
   id: string;
@@ -154,25 +155,6 @@ function formatGameEvent(event: { type: string; location_id?: string; offset?: n
   return `[Turn ${turn}] ${event.type.replace(/\./g, " ")}.`;
 }
 
-function HomesteadFloorPlan({ homestead }: { homestead: HomesteadState }) {
-  const doorState = homestead.front_door === "repaired" ? "Repaired" : "Broken";
-  return (
-    <section className="homestead-console" aria-label="Inherited homestead">
-      <div className="homestead-floorplan" role="img" aria-label={`Single-room shack, front door ${doorState.toLowerCase()}`}>
-        <div className="homestead-room">
-          <span className="room-label">MAIN ROOM</span>
-          <span className={`room-door ${homestead.front_door}`} aria-hidden="true" />
-        </div>
-      </div>
-      <div className="homestead-readout">
-        <span>Inherited homestead</span>
-        <strong>Single-room shack</strong>
-        <small>Front Door: {doorState}</small>
-      </div>
-    </section>
-  );
-}
-
 function GameApp() {
   const [state, setState] = useState<SaveState | null>(null);
   const [needsCreation, setNeedsCreation] = useState(false);
@@ -185,7 +167,7 @@ function GameApp() {
   const [autoTravel, setAutoTravel] = useState(false);
   const [countdown, setCountdown] = useState(AUTO_TRAVEL_DELAY_SECONDS);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabId>("home");
+  const [activeTab, setActiveTab] = useState<TabId>("console");
   const [command, setCommand] = useState("");
   const [commandNotice, setCommandNotice] = useState<string | null>(null);
   const [encounterOpen, setEncounterOpen] = useState(false);
@@ -307,14 +289,14 @@ function GameApp() {
     }
   }, [appendEvents, busy, routeMap?.length, state]);
 
-  async function runPrologueAction(action: "homestead.explore" | "quest.accept" | "adventure.start" | "npc.garrick.talk" | "travel.expedited" | "homestead.deposit" | "craft.iron_nails" | "homestead.repair_door") {
+  async function runPrologueAction(action: "homestead.explore" | "quest.accept" | "adventure.start" | "npc.garrick.talk" | "travel.expedited" | "homestead.deposit" | "craft.iron_nails" | "homestead.repair_door", payload: Record<string, number> = {}) {
     if (!state || busy) return;
     setBusy(true);
     setError(null);
     try {
       const response = await request<ActionResponse>(`/api/v1/saves/${state.save_id}/actions`, {
         method: "POST",
-        body: JSON.stringify({ action_id: actionId(), action, expected_state_version: state.state_version, payload: {} }),
+        body: JSON.stringify({ action_id: actionId(), action, expected_state_version: state.state_version, payload }),
       });
       setState(response.state);
       appendEvents(response.events.map((event) => formatGameEvent(event, response.state.route_offset)));
@@ -449,9 +431,10 @@ function GameApp() {
   const navigation: Array<{ id: TabId; label: string; icon: string }> = [
     { id: "journal", label: "Journal", icon: "▤" },
     { id: "map", label: "World Map", icon: "✧" },
-    { id: "home", label: "Home", icon: "⌂" },
+    { id: "console", label: "Console", icon: "⌂" },
     { id: "character", label: "Character", icon: "♙" },
     { id: "inventory", label: "Inventory", icon: "▣" },
+    { id: "homestead", label: "Homestead", icon: "⌂" },
   ];
 
   const storage = state?.homestead.storage ?? {};
@@ -469,9 +452,6 @@ function GameApp() {
         ...(state?.route_offset === routeMap?.length && state?.prologue.quest_status === "active" ? [{ id: "garrick", label: "Speak to Master Garrick", icon: "✦", enabled: !busy, run: () => void runPrologueAction("npc.garrick.talk") }] : []),
         ...((state?.prologue.expedited_unlocked || state?.discovered_locations.includes("briarbrook")) && (state.route_offset === 0 || state.route_offset === routeMap?.length) ? [{ id: "expedited", label: "Expedited Travel", icon: "≫", enabled: !busy, hint: "One action. Possible ambush.", run: () => void runPrologueAction("travel.expedited") }] : []),
         { id: "gather", label: "Gather wood", icon: "❖", enabled: Boolean(state?.discovered_locations.includes("old_timberwood")) && !busy, hint: "Gather wood at Old Timberwood.", run: () => void gatherWood() },
-        ...(state?.route_offset === 0 && (state.resources.wood ?? 0) + (state.resources.iron_ore ?? 0) + (state.resources.iron_nails ?? 0) > 0 ? [{ id: "deposit", label: "Deposit Materials", icon: "▣", enabled: !busy, run: () => void runPrologueAction("homestead.deposit") }] : []),
-        ...(state?.route_offset === 0 ? [{ id: "nails", label: "Forge Iron Nails", icon: "◆", enabled: !busy && (storage.iron_ore ?? 0) >= 2, hint: "Consumes 2 Iron Ore.", run: () => void runPrologueAction("craft.iron_nails") }] : []),
-        ...(state?.route_offset === 0 && !doorRepaired ? [{ id: "repair", label: "Repair Front Door", icon: "⌂", enabled: !busy && (storage.wood ?? 0) >= 10 && (storage.iron_nails ?? 0) >= 6, hint: "Requires 10 Common Wood and 6 Iron Nails in storage.", run: () => void runPrologueAction("homestead.repair_door") }] : []),
       ];
 
   const knownWaypoints = routeMap?.waypoints.filter((waypoint) => waypoint.known) ?? [];
@@ -517,10 +497,9 @@ function GameApp() {
           <div className="status-metric"><span>State</span><strong>v{state?.state_version ?? "—"}</strong><small>saved</small></div>
         </section>
 
-        <section className={`console-content ${activeTab === "home" ? "home-console-surface" : ""}`}>
-          {activeTab === "home" && <>
-            <header className="terminal-context"><div><p className="context-label">Home terminal · Western Road</p><h2>Adventure channel</h2><p className="muted">The world is listening. Type a command or choose an action below.</p></div><span className="terminal-state">{autoTravel ? `AUTO ${countdown}s` : "PAUSED"}</span></header>
-            {state?.homestead && <HomesteadFloorPlan homestead={state.homestead} />}
+        <section className={`console-content ${activeTab === "console" ? "home-console-surface" : ""}`}>
+          {activeTab === "console" && <>
+            <header className="terminal-context"><div><p className="context-label">Game Console · Western Road</p><h2>Adventure channel</h2><p className="muted">The world is listening. Type a command or choose an action below.</p></div><span className="terminal-state">{autoTravel ? `AUTO ${countdown}s` : "PAUSED"}</span></header>
             <div className="terminal-window">
               <div className="terminal-banner">HEARTH &amp; HAVOC // LIVE WORLD FEED</div>
               <ol className="terminal-events" ref={terminalRef} onScroll={handleTerminalScroll} aria-live="polite">
@@ -545,6 +524,7 @@ function GameApp() {
           {activeTab === "journal" && <section className="quest-journal"><div className="view-heading"><p className="context-label">Adventure ledger</p><h2>Quest Journal</h2><p className="muted">Track objectives, story threads, and contracts as the world begins to make demands.</p></div><div className="quest-layout"><aside className="quest-list"><div className="quest-list-heading">Active quests <small>{(state?.prologue.quest_status === "active" ? 1 : 0) + (!doorRepaired ? 1 : 0)}</small></div>{state?.prologue.quest_status === "active" ? <button className="quest-entry" type="button">A Father's Shadow</button> : null}{!doorRepaired && <button className="quest-entry" type="button">The King's Generosity</button>}<div className="quest-list-heading">Completed <small>{(state?.prologue.quest_status === "completed" ? 1 : 0) + (doorRepaired ? 1 : 0)}</small></div>{state?.prologue.quest_status === "completed" ? <button className="quest-entry completed" type="button">A Father's Shadow</button> : null}{doorRepaired ? <button className="quest-entry completed" type="button">The King's Generosity</button> : <p className="ledger-empty">Complete the repair to close this ledger.</p>}</aside><section className="quest-details"><p className="context-label">Selected quest</p>{state?.prologue.quest_status === "active" ? <><h3>A Father's Shadow</h3><p className="muted">A stranger claims the King's account of your father's service is incomplete. Travel to Briarbrook and find someone who remembers him.</p><p className="quest-objective">{state.prologue.adventure_started ? "▣ Travel to Briarbrook — adventure underway" : "□ Accept the guided adventure to Briarbrook"}</p></> : state?.prologue.quest_status === "completed" ? <><h3>A Father's Shadow</h3><p className="muted">Master Garrick Cobb confirmed that your father was investigating something unrelated to the war shortly before his final campaign.</p><p className="quest-objective complete">▣ Investigation complete — a new lead has been recorded</p></> : <><h3>The King's Generosity</h3><p className="muted">Make the inherited shack safe enough that wildlife stops treating it as a promising rental.</p><p className="quest-objective">{woodOwned >= 10 ? "▣ Obtain 10 Common Wood" : `□ Obtain 10 Common Wood — ${woodOwned}/10`}</p><p className="quest-objective">{nailsOwned >= 6 ? "▣ Obtain or forge 6 Iron Nails" : `□ Obtain or forge 6 Iron Nails — ${nailsOwned}/6`}</p><p className="quest-objective">{doorRepaired ? "▣ Repair the homestead front door" : "□ Repair the homestead front door"}</p></>}</section></div></section>}
           {activeTab === "character" && <section className="panel-empty"><p className="context-label">Character</p><h2>A craftsperson on the road</h2><p className="muted">Attributes, mastery, equipment, and progression are not modeled in this vertical slice yet.</p></section>}
           {activeTab === "inventory" && <section className="panel-empty"><p className="context-label">Inventory</p><h2>Carried supplies</h2><p className="muted">Common Wood: {state?.resources.wood ?? 0} · Iron Ore: {state?.resources.iron_ore ?? 0} · Iron Nails: {state?.resources.iron_nails ?? 0}</p><p className="muted">Homestead storage: {storage.wood ?? 0} Wood · {storage.iron_ore ?? 0} Iron Ore · {storage.iron_nails ?? 0} Iron Nails</p></section>}
+          {activeTab === "homestead" && state && <HomesteadView homestead={state.homestead} carried={state.resources} busy={busy} atHomestead={state.route_offset === 0} onAction={(action, payload) => void runPrologueAction(action, payload)} />}
         </section>
 
         {encounterOpen && combat && <section className="encounter-overlay" role="dialog" aria-modal="false" aria-labelledby="encounter-title">
@@ -554,7 +534,7 @@ function GameApp() {
           {combat.status === "active" ? <div className="combat-actions">{["attack", "defend"].map((action) => <button className="action-button" key={action} onClick={() => void combatAction(action as "attack" | "defend")} disabled={busy || combat.turn !== "player"}>{action === "attack" ? "⚔ Attack" : "◇ Defend"}</button>)}</div> : <button className="secondary-button" onClick={() => setEncounterOpen(false)}>Return to terminal</button>}
         </section>}
 
-        <nav className="bottom-navigation" aria-label="Game navigation">{navigation.map((item) => <button key={item.id} className={`nav-button ${activeTab === item.id ? "active" : ""}`} onClick={() => setActiveTab(item.id)} aria-current={activeTab === item.id ? "page" : undefined}><span className="nav-icon">{item.icon}</span><span>{item.label}</span></button>)}</nav>
+        <nav className="bottom-navigation" aria-label="Game navigation"><div className="nav-group nav-group-left">{navigation.slice(0, 2).map((item) => <button key={item.id} className={`nav-button ${activeTab === item.id ? "active" : ""}`} onClick={() => setActiveTab(item.id)} aria-current={activeTab === item.id ? "page" : undefined}><span className="nav-icon">{item.icon}</span><span>{item.label}</span></button>)}</div><button className={`nav-button nav-console ${activeTab === "console" ? "active" : ""}`} onClick={() => setActiveTab("console")} aria-current={activeTab === "console" ? "page" : undefined}><span className="nav-icon">⌂</span><span>Console</span></button><div className="nav-group nav-group-right">{navigation.slice(3).map((item) => <button key={item.id} className={`nav-button ${activeTab === item.id ? "active" : ""}`} onClick={() => setActiveTab(item.id)} aria-current={activeTab === item.id ? "page" : undefined}><span className="nav-icon">{item.icon}</span><span>{item.label}</span></button>)}</div></nav>
       </div>
     </main>
   );

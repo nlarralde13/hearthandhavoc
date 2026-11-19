@@ -1,5 +1,11 @@
 import pytest
-from app.content import ContentError, load_npc_record, load_quest_record, validate_all_content, validate_route_record
+from app.content import (
+    ContentError,
+    load_npc_record,
+    load_quest_record,
+    validate_all_content,
+    validate_route_record,
+)
 
 
 def test_all_checked_in_content_is_valid() -> None:
