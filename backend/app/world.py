@@ -68,6 +68,46 @@ class WorldValidation(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class PlayerWorldNode(BaseModel):
+    id: str
+    name: str
+    type: str
+    position: dict[str, float]
+    description: str
+    visibility: str
+    child_map_id: str | None = None
+
+
+class PlayerWorldConnection(BaseModel):
+    id: str
+    source: str
+    destination: str
+    bidirectional: bool
+    travel_turns: int
+    expedited_eligible: bool
+    ambush_chance: float
+    waypoints: list[WorldWaypoint]
+
+
+class PlayerTravelProgress(BaseModel):
+    in_transit: bool
+    source: str | None = None
+    destination: str | None = None
+    completed_turns: int = 0
+    total_turns: int = 0
+
+
+class PlayerWorldMap(BaseModel):
+    map_id: str
+    name: str
+    parent_map_id: str | None = None
+    parent_location_id: str | None = None
+    current_location_id: str | None = None
+    nodes: list[PlayerWorldNode]
+    connections: list[PlayerWorldConnection]
+    travel: PlayerTravelProgress
+
+
 def _override_root_base() -> Path:
     configured = Path(get_settings().world_data_dir)
     return configured if configured.is_absolute() else Path.cwd() / configured
@@ -87,7 +127,9 @@ def _map_path(map_id: str, root: Path) -> Path:
     return root / f"{map_id}.json"
 
 
-def validate_world_map(world_map: WorldMap, all_maps: list[WorldMap] | None = None) -> WorldValidation:
+def validate_world_map(
+    world_map: WorldMap, all_maps: list[WorldMap] | None = None
+) -> WorldValidation:
     node_ids = [node.id for node in world_map.nodes]
     connection_ids = [connection.id for connection in world_map.connections]
     if len(node_ids) != len(set(node_ids)):
@@ -122,8 +164,10 @@ def validate_world_map(world_map: WorldMap, all_maps: list[WorldMap] | None = No
         map_ids = {item.id for item in all_maps}
         if world_map.parent_map_id and world_map.parent_map_id not in map_ids:
             raise ValueError(f"parent map {world_map.parent_map_id} does not exist")
-        child_ids = {node.child_map_id for item in all_maps for node in item.nodes if node.child_map_id}
-        if len(child_ids) != len([node.child_map_id for item in all_maps for node in item.nodes if node.child_map_id]):
+        child_references = [
+            node.child_map_id for item in all_maps for node in item.nodes if node.child_map_id
+        ]
+        if len(set(child_references)) != len(child_references):
             raise ValueError("a child map may be referenced by only one location")
         by_id = {item.id: item for item in all_maps}
         for item in all_maps:
@@ -180,3 +224,49 @@ def save_world_map(world_map: WorldMap) -> WorldValidation:
         if os.path.exists(temporary):
             os.unlink(temporary)
     return validation
+
+
+def player_world_view(
+    world_map: WorldMap,
+    known_location_ids: set[str],
+    current_location_id: str | None,
+    travel: PlayerTravelProgress,
+) -> PlayerWorldMap:
+    visible_nodes = [node for node in world_map.nodes if node.id in known_location_ids]
+    visible_ids = {node.id for node in visible_nodes}
+    nodes = [
+        PlayerWorldNode(
+            id=node.id,
+            name=node.name,
+            type=node.type,
+            position=node.position,
+            description=node.description,
+            visibility="visited" if node.id == current_location_id else "discovered",
+            child_map_id=node.child_map_id,
+        )
+        for node in visible_nodes
+    ]
+    connections = [
+        PlayerWorldConnection(
+            id=connection.id,
+            source=connection.source,
+            destination=connection.destination,
+            bidirectional=connection.bidirectional,
+            travel_turns=connection.travel_turns,
+            expedited_eligible=connection.expedited_travel.eligible,
+            ambush_chance=connection.expedited_travel.ambush_chance,
+            waypoints=connection.waypoints,
+        )
+        for connection in world_map.connections
+        if connection.source in visible_ids and connection.destination in visible_ids
+    ]
+    return PlayerWorldMap(
+        map_id=world_map.id,
+        name=world_map.name,
+        parent_map_id=world_map.parent_map_id,
+        parent_location_id=world_map.parent_location_id,
+        current_location_id=current_location_id,
+        nodes=nodes,
+        connections=connections,
+        travel=travel,
+    )

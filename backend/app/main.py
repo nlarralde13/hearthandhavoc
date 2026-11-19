@@ -1,3 +1,4 @@
+import json
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -33,7 +34,16 @@ from app.services import (
     start_combat,
 )
 from app.settings import get_settings
-from app.world import WorldMap, WorldValidation, list_world_maps, load_world_map, save_world_map
+from app.world import (
+    PlayerTravelProgress,
+    PlayerWorldMap,
+    WorldMap,
+    WorldValidation,
+    list_world_maps,
+    load_world_map,
+    player_world_view,
+    save_world_map,
+)
 
 
 @asynccontextmanager
@@ -89,6 +99,58 @@ def put_dev_world_map(map_id: str, world_map: WorldMap) -> WorldValidation:
         return save_world_map(world_map)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+@app.get("/api/v1/saves/{save_id}/world-map", response_model=PlayerWorldMap)
+def player_world_map(
+    save_id: str,
+    map_id: str = "western_region",
+    db: Session = Depends(get_db),
+    owner_id: str = Depends(actor_id),
+) -> PlayerWorldMap:
+    try:
+        save = get_save(db, owner_id, save_id)
+        world_map = load_world_map(map_id)
+        prologue = json.loads(save.prologue_state)
+        discovered = set(json.loads(save.discovered_locations))
+        if map_id == "western_region":
+            road = next((item for item in world_map.connections if item.id == save.route_id), None)
+            route_length = road.travel_turns if road else save.route_offset
+            known = {"homestead", *discovered}
+            if (
+                prologue["quest_status"] in {"offered", "active", "completed"}
+                or prologue["adventure_started"]
+            ):
+                known.add("briarbrook")
+            current = (
+                "homestead"
+                if save.route_offset == 0
+                else "briarbrook"
+                if save.route_offset >= route_length
+                else None
+            )
+            travel = PlayerTravelProgress(
+                in_transit=current is None and save.route_offset > 0,
+                source="homestead" if save.route_offset > 0 and current is None else None,
+                destination="briarbrook" if save.route_offset > 0 and current is None else None,
+                completed_turns=save.route_offset if current is None else 0,
+                total_turns=route_length if current is None else 0,
+            )
+        else:
+            parent = load_world_map(world_map.parent_map_id) if world_map.parent_map_id else None
+            parent_location = world_map.parent_location_id
+            if parent is None or (
+                parent_location not in discovered and parent_location != "homestead"
+            ):
+                raise ValueError("nested map is not discovered")
+            known = {node.id for node in world_map.nodes}
+            current = None
+            travel = PlayerTravelProgress(in_transit=False)
+        return player_world_view(world_map, known, current, travel)
+    except SaveNotFound:
+        raise HTTPException(status_code=404, detail="save not found") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
 
 
 @app.post("/api/v1/saves", response_model=SaveState, status_code=status.HTTP_201_CREATED)

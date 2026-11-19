@@ -34,6 +34,12 @@ hierarchy cycles. Unconnected locations are retained and returned as warnings.
 Normal graph cycles are valid. Exported JSON can be reviewed and copied into
 the canonical fixtures through the normal Git workflow.
 
+The player-facing World Map reads the same definitions through a separate
+save-scoped endpoint. That endpoint filters nodes and connections by the
+player's persisted discovery state, marks the current node or in-transit route
+progress, and never returns the full editor definition. The editor remains a
+developer tool; the player map is presentation and navigation only.
+
 ## Editor controls
 
 - Add locations from the left palette.
