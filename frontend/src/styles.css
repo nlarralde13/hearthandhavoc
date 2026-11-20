@@ -510,6 +510,146 @@ body { overflow: hidden; }
   .creation-footer .primary-button { width: 100%; }
 }
 
+/* Phone layout correction. Keep the console in normal document flow so the
+   terminal, command bar, gamepad, and navigation each receive real space. */
+@media (max-width: 600px) {
+  html, body, #root { width: 100%; min-width: 0; max-width: 100%; }
+  body { overflow-x: hidden; overflow-y: auto; }
+  .shell {
+    width: 100%;
+    height: 100dvh;
+    min-height: 100dvh;
+    margin: 0;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+  .game-console {
+    width: 100% !important;
+    height: 100dvh !important;
+    min-height: 0;
+    margin: 0;
+    padding: 6px !important;
+    border-width: 1px !important;
+    box-shadow: none !important;
+  }
+  .game-console .masthead {
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 5px !important;
+    padding: 2px 4px 5px !important;
+  }
+  .masthead h1 { font-size: 1.3rem !important; white-space: nowrap; }
+  .masthead-actions { min-width: 0; gap: 3px !important; }
+  .masthead-actions .version { display: none; }
+  .theme-toggle, .reset-button { padding: 4px 5px !important; font-size: .65rem !important; }
+  .reset-button { display: none; }
+
+  .character-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px 8px !important;
+    margin-bottom: 5px !important;
+    padding: 5px 6px !important;
+  }
+  .character-identity {
+    grid-column: 1 / -1;
+    min-width: 0 !important;
+    gap: 7px;
+  }
+  .character-identity strong { font-size: .84rem; }
+  .character-identity small { margin-top: 1px; font-size: .64rem; }
+  .crest { display: none; }
+  .status-metric {
+    min-width: 0 !important;
+    padding-left: 6px !important;
+    border-left: 1px solid var(--retro-border) !important;
+  }
+  .status-metric:nth-of-type(2n) { border-left: 0 !important; }
+  .status-metric span { font-size: .62rem !important; }
+  .status-metric strong { margin-top: 1px; font-size: .74rem; }
+  .status-metric small { display: none; }
+  .status-metric:last-child { display: none; }
+
+  .console-content { min-height: 0; }
+  .home-console-surface {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    padding: 6px 6px 0 !important;
+  }
+  .terminal-context { gap: 3px; padding: 1px 1px 5px !important; }
+  .terminal-context h2 { font-size: 1.05rem !important; }
+  .terminal-context .muted { display: none; }
+  .terminal-state { font-size: .62rem; }
+  .terminal-window {
+    min-height: 0;
+    margin-top: 5px !important;
+  }
+  .terminal-events { padding: 8px 8px 8px !important; }
+  .terminal-event { gap: 6px; font-size: .76rem !important; line-height: 1.32; }
+  .home-console-surface .command-bar {
+    flex: 0 0 auto;
+    grid-template-columns: 1fr 58px !important;
+    margin: 5px 0 3px !important;
+    padding: 3px !important;
+  }
+  .home-console-surface .command-mode {
+    grid-column: 1 / -1;
+    min-height: 28px;
+    padding: 3px 6px;
+    text-align: left;
+  }
+  .command-bar input { min-width: 0; padding: 6px !important; font-size: .75rem !important; }
+  .send-button { padding: 4px !important; }
+  .command-notice { margin: 0 2px 3px !important; font-size: .64rem !important; }
+
+  /* Do not overlay the gamepad on the event stream on phones. */
+  .home-console-surface .gamepad {
+    position: static !important;
+    display: block !important;
+    flex: 0 0 auto;
+    margin: 3px 0 5px !important;
+    padding: 4px !important;
+  }
+  .gamepad .section-heading { min-width: 0 !important; margin: 0 0 3px !important; }
+  .gamepad .section-heading h3 { font-size: .78rem !important; }
+  .gamepad .action-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 3px !important;
+  }
+  .gamepad .action-button {
+    min-width: 0;
+    min-height: 30px !important;
+    padding: 4px 3px;
+    overflow-wrap: anywhere;
+    font-size: .66rem !important;
+  }
+  .gamepad .action-icon { display: none; }
+
+  /* Flatten the left/right groups so six destinations fit in two rows. */
+  .bottom-navigation {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-auto-rows: minmax(34px, auto);
+    gap: 3px !important;
+    min-width: 0;
+    margin-top: 4px !important;
+    padding-top: 4px !important;
+  }
+  .bottom-navigation .nav-group { display: contents; }
+  .bottom-navigation .nav-button {
+    min-width: 0;
+    min-height: 34px !important;
+    padding: 3px 2px !important;
+    overflow-wrap: anywhere;
+    font-size: .64rem !important;
+  }
+  .bottom-navigation .nav-console { min-width: 0 !important; order: initial; }
+  .bottom-navigation .nav-icon { display: none; }
+}
+
 /* 1998 web RPG presentation layer. The gameplay layout remains modern and
    responsive underneath, but the surfaces are intentionally plain and compact. */
 :root {
@@ -684,3 +824,51 @@ html[data-theme="night"] .nav-button.active { background: #45484d !important; }
 
 /* Keep the development map editor practical and light in both themes. */
 .world-editor button, .world-editor select, .world-editor input, .world-editor textarea { border-radius: 0 !important; box-shadow: none !important; }
+
+/* Final mobile overrides: keep these after the desktop/retro layers so the
+   phone layout cannot be re-expanded by a later shared rule. */
+@media (max-width: 600px) {
+  .shell { width: 100%; height: 100dvh; min-height: 100dvh; margin: 0; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) !important; }
+  .game-console { width: 100% !important; height: 100% !important; min-height: 0; margin: 0; padding: 6px !important; box-shadow: none !important; }
+  .game-console .masthead { align-items: center; gap: 8px; margin: 0 0 5px !important; padding: 2px 4px 5px !important; }
+  .masthead h1 { font-size: 1.3rem !important; white-space: nowrap; }
+  .masthead-actions { min-width: 0; gap: 3px !important; }
+  .masthead-actions .version, .reset-button { display: none; }
+  .theme-toggle { padding: 4px 5px !important; font-size: .65rem !important; }
+
+  .character-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 8px !important; margin-bottom: 5px !important; padding: 5px 6px !important; }
+  .character-identity { grid-column: 1 / -1; min-width: 0 !important; gap: 7px; }
+  .crest { display: none; }
+  .character-identity strong { font-size: .84rem; }
+  .character-identity small { margin-top: 1px; font-size: .64rem; }
+  .status-metric { min-width: 0 !important; padding-left: 6px !important; }
+  .status-metric:nth-of-type(2n) { border-left: 0 !important; }
+  .status-metric strong { margin-top: 1px; font-size: .74rem; }
+  .status-metric small, .status-metric:last-child { display: none; }
+
+  .home-console-surface { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; padding: 6px !important; }
+  .terminal-context { gap: 3px; padding: 1px 1px 5px !important; }
+  .terminal-context h2 { font-size: 1.05rem !important; }
+  .terminal-context .muted { display: none; }
+  .terminal-window { min-height: 0; margin-top: 5px !important; }
+  .terminal-events { padding: 8px !important; }
+  .terminal-event { gap: 6px; font-size: .76rem !important; line-height: 1.32; }
+  .home-console-surface .command-bar { flex: 0 0 auto; grid-template-columns: 1fr 58px !important; margin: 5px 0 3px !important; padding: 3px !important; }
+  .home-console-surface .command-mode { grid-column: 1 / -1; min-height: 28px; padding: 3px 6px; text-align: left; }
+  .command-bar input { min-width: 0; padding: 6px !important; font-size: .75rem !important; }
+  .send-button { padding: 4px !important; }
+  .command-notice { margin: 0 2px 3px !important; font-size: .64rem !important; }
+
+  .home-console-surface .gamepad { position: static !important; display: block !important; flex: 0 0 auto; margin: 3px 0 5px !important; padding: 4px !important; }
+  .gamepad .section-heading { min-width: 0 !important; margin: 0 0 3px !important; }
+  .gamepad .section-heading h3 { font-size: .78rem !important; }
+  .gamepad .action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 3px !important; }
+  .gamepad .action-button { min-width: 0; min-height: 30px !important; padding: 4px 3px; overflow-wrap: anywhere; font-size: .66rem !important; }
+  .gamepad .action-icon { display: none; }
+
+  .bottom-navigation { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; grid-auto-rows: minmax(34px, auto); gap: 3px !important; min-width: 0; margin-top: 4px !important; padding-top: 4px !important; }
+  .bottom-navigation .nav-group { display: contents; }
+  .bottom-navigation .nav-button { min-width: 0; min-height: 34px !important; padding: 3px 2px !important; overflow-wrap: anywhere; font-size: .64rem !important; }
+  .bottom-navigation .nav-console { min-width: 0 !important; order: initial; }
+  .bottom-navigation .nav-icon { display: none; }
+}
