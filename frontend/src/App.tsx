@@ -90,6 +90,7 @@ type ActionDefinition = {
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const USER_KEY = "hearth-and-havoc-dev-user";
 const SAVE_KEY = "hearth-and-havoc-save-id";
+const THEME_KEY = "hearth-and-havoc-theme";
 const AUTO_TRAVEL_DELAY_SECONDS = 3;
 
 function devUserId(): string {
@@ -172,8 +173,17 @@ function GameApp() {
   const [commandNotice, setCommandNotice] = useState<string | null>(null);
   const [encounterOpen, setEncounterOpen] = useState(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const [theme, setTheme] = useState<"light" | "night">(() => {
+    const savedTheme = localStorage.getItem(THEME_KEY);
+    return savedTheme === "night" ? "night" : "light";
+  });
   const terminalRef = useRef<HTMLOListElement | null>(null);
   const terminalNearBottom = useRef(true);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
 
   const appendEvents = useCallback((messages: string[]) => {
     setEvents((current) => [...current, ...messages]);
@@ -483,7 +493,7 @@ function GameApp() {
       <div className="game-console">
         <header className="masthead">
           <div><h1>Hearth <span>&amp;</span> Havoc</h1></div>
-          <div className="masthead-actions"><div className="version">content {state?.content_version ?? "—"}</div><button className="reset-button" onClick={() => void resetProgress()} disabled={busy}>Reset progress</button></div>
+          <div className="masthead-actions"><div className="version">content {state?.content_version ?? "—"}</div><button className="theme-toggle" type="button" onClick={() => setTheme((current) => current === "light" ? "night" : "light")} aria-label={`Switch to ${theme === "light" ? "night" : "light"} mode`}>{theme === "light" ? "Night mode" : "Day mode"}</button><button className="reset-button" onClick={() => void resetProgress()} disabled={busy}>Reset progress</button></div>
         </header>
 
         {error && <div className="notice error">{error}</div>}

@@ -509,3 +509,178 @@ body { overflow: hidden; }
   .creation-footer { align-items: stretch; flex-direction: column; }
   .creation-footer .primary-button { width: 100%; }
 }
+
+/* 1998 web RPG presentation layer. The gameplay layout remains modern and
+   responsive underneath, but the surfaces are intentionally plain and compact. */
+:root {
+  --retro-page: #f5f5f0;
+  --retro-surface: #ffffff;
+  --retro-subtle: #eeeeea;
+  --retro-panel: #fafafa;
+  --retro-text: #202020;
+  --retro-muted: #5f5f5f;
+  --retro-border: #9b9b9b;
+  --retro-dark-border: #606060;
+  --retro-link: #0000ee;
+  --retro-link-visited: #551a8b;
+  --retro-accent: #8b0000;
+  --retro-accent-soft: #f2dddd;
+  --retro-green: #176b35;
+  --retro-terminal: #ffffff;
+  --retro-terminal-text: #202020;
+}
+
+html[data-theme="night"] {
+  --retro-page: #202124;
+  --retro-surface: #2b2c2f;
+  --retro-subtle: #35363a;
+  --retro-panel: #303135;
+  --retro-text: #eeeeee;
+  --retro-muted: #b8b8b8;
+  --retro-border: #777777;
+  --retro-dark-border: #a0a0a0;
+  --retro-link: #7db7ff;
+  --retro-link-visited: #d0a5ff;
+  --retro-accent: #ffb0a8;
+  --retro-accent-soft: #4b3032;
+  --retro-green: #8fd39d;
+  --retro-terminal: #151619;
+  --retro-terminal-text: #eeeeee;
+}
+
+html, body, #root { background: var(--retro-page) !important; color: var(--retro-text) !important; }
+body, button, input, textarea, select { font-family: Verdana, Tahoma, Arial, sans-serif; }
+body { min-width: 320px; }
+button, input, textarea, select { border-radius: 0 !important; }
+a, .map-breadcrumb { color: var(--retro-link) !important; text-decoration: underline; }
+a:visited { color: var(--retro-link-visited); }
+h1, h2, h3, h4 { color: var(--retro-text) !important; font-family: Georgia, "Times New Roman", serif !important; letter-spacing: normal !important; text-transform: none !important; }
+h1 { font-size: clamp(1.65rem, 4vw, 2.5rem) !important; }
+h2 { font-size: clamp(1.3rem, 3vw, 1.9rem) !important; }
+h3 { font-size: 1.1rem !important; }
+p, li, dd, dt, span, small { color: inherit; }
+.muted, .version, .context-label, .status-metric small, .character-identity small, .section-heading small { color: var(--retro-muted) !important; }
+.context-label { font-size: .75rem !important; font-weight: normal !important; letter-spacing: normal !important; text-transform: none !important; }
+
+.shell { max-width: 1180px !important; padding: 14px 18px 28px !important; }
+.game-console { width: min(96vw, 1120px) !important; height: calc(100dvh - 42px) !important; padding: 12px !important; border: 1px solid var(--retro-dark-border) !important; background: var(--retro-surface) !important; box-shadow: none !important; }
+.masthead { margin-bottom: 8px !important; padding: 4px 6px 8px !important; border-bottom: 1px solid var(--retro-border) !important; }
+.masthead h1 { color: var(--retro-accent) !important; }
+.masthead h1 span { color: var(--retro-green) !important; }
+.masthead-actions { display: flex !important; align-items: center; gap: 7px !important; }
+.version { font-size: .72rem; }
+.theme-toggle, .reset-button { padding: 5px 8px !important; border: 1px solid var(--retro-dark-border) !important; color: var(--retro-text) !important; background: var(--retro-subtle) !important; cursor: pointer; font-size: .72rem !important; text-transform: none !important; }
+.theme-toggle:hover, .reset-button:hover:not(:disabled) { border-color: var(--retro-link) !important; color: var(--retro-link) !important; background: var(--retro-surface) !important; }
+.notice { margin-bottom: 8px !important; padding: 8px 10px !important; border: 1px solid var(--retro-accent) !important; color: var(--retro-accent) !important; background: var(--retro-accent-soft) !important; }
+
+.character-strip { gap: 12px !important; margin-bottom: 8px !important; padding: 7px 9px !important; border: 1px solid var(--retro-border) !important; background: var(--retro-subtle) !important; }
+.character-identity { min-width: 190px !important; }
+.crest { width: 28px !important; height: 30px !important; border: 1px solid var(--retro-dark-border) !important; color: var(--retro-accent) !important; background: var(--retro-surface) !important; font-size: 1rem !important; }
+.character-identity strong, .status-metric strong { color: var(--retro-text) !important; }
+.status-metric { min-width: 78px !important; padding-left: 10px !important; border-left: 1px solid var(--retro-border) !important; }
+.status-metric span { color: var(--retro-muted) !important; font-size: .68rem !important; letter-spacing: normal !important; text-transform: none !important; }
+
+.console-content { background: var(--retro-surface) !important; }
+.home-console-surface { padding: 8px 10px 82px !important; border: 1px solid var(--retro-border) !important; background: var(--retro-surface) !important; box-shadow: none !important; }
+.terminal-context { padding: 3px 2px 7px !important; border-bottom: 1px solid var(--retro-border) !important; }
+.terminal-context h2 { margin-bottom: 2px !important; }
+.terminal-context .muted { font-size: .76rem !important; }
+.terminal-window { margin-top: 8px !important; border: 1px solid var(--retro-dark-border) !important; background: var(--retro-terminal) !important; box-shadow: none !important; }
+.terminal-banner { padding: 5px 8px !important; border-bottom: 1px solid var(--retro-border) !important; color: var(--retro-muted) !important; font: .72rem "Courier New", monospace !important; letter-spacing: normal !important; }
+.terminal-events { gap: 5px !important; padding: 10px 12px 70px !important; scrollbar-color: var(--retro-border) var(--retro-terminal) !important; }
+.terminal-event { color: var(--retro-terminal-text) !important; font: .82rem/1.4 "Courier New", monospace !important; }
+.terminal-caret { color: var(--retro-green) !important; }
+.terminal-event.travel { color: var(--retro-muted) !important; }
+.terminal-event.discovery { color: #805600 !important; }
+.terminal-event.resource { color: var(--retro-green) !important; }
+.terminal-event.combat { color: #8b2020 !important; }
+.terminal-event.warning { color: #805600 !important; }
+.terminal-event.system { color: #405c75 !important; }
+.terminal-event.narrative { color: var(--retro-terminal-text) !important; }
+html[data-theme="night"] .terminal-event.discovery, html[data-theme="night"] .terminal-event.warning { color: #ffd36a !important; }
+html[data-theme="night"] .terminal-event.combat { color: #ffaaa0 !important; }
+html[data-theme="night"] .terminal-event.system { color: #a7c9e8 !important; }
+.command-bar { grid-template-columns: 115px 1fr 70px !important; gap: 4px !important; margin: 8px 0 4px !important; padding: 4px !important; border: 1px solid var(--retro-border) !important; background: var(--retro-subtle) !important; }
+.command-mode, .send-button { border: 1px solid var(--retro-dark-border) !important; color: var(--retro-text) !important; background: var(--retro-surface) !important; font-weight: normal !important; }
+.send-button { color: var(--retro-link) !important; text-decoration: underline; }
+.command-bar input { padding: 7px 8px !important; border: 1px solid var(--retro-border) !important; color: var(--retro-text) !important; background: var(--retro-surface) !important; font: .82rem "Courier New", monospace !important; font-style: normal !important; }
+.command-notice { margin-top: 2px !important; font-size: .72rem !important; }
+.home-console-surface .gamepad { right: 10px !important; bottom: 8px !important; left: 10px !important; gap: 8px !important; padding: 5px 7px !important; border: 1px solid var(--retro-border) !important; background: var(--retro-subtle) !important; box-shadow: none !important; backdrop-filter: none !important; }
+.gamepad .section-heading { min-width: 108px !important; }
+.gamepad .section-heading h3 { font-size: .9rem !important; }
+.gamepad .action-grid { gap: 4px !important; }
+.gamepad .action-button { min-height: 32px !important; border: 1px outset var(--retro-dark-border) !important; color: var(--retro-text) !important; background: var(--retro-surface) !important; font-size: .7rem !important; }
+.gamepad .action-button:hover:not(:disabled) { border-color: var(--retro-link) !important; color: var(--retro-link) !important; background: var(--retro-surface) !important; }
+.action-icon { color: inherit !important; font-size: .9rem !important; }
+.action-button:disabled { color: var(--retro-muted) !important; background: var(--retro-subtle) !important; }
+
+.bottom-navigation { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.5fr) !important; gap: 4px !important; margin-top: 8px !important; padding-top: 8px !important; border-top: 1px solid var(--retro-border) !important; }
+.nav-group { gap: 4px !important; }
+.nav-button { min-height: 42px !important; padding: 5px 4px !important; border: 1px solid var(--retro-border) !important; color: var(--retro-link) !important; background: var(--retro-surface) !important; cursor: pointer; font-size: .72rem !important; font-weight: normal !important; text-decoration: underline; }
+.nav-button:hover { border-color: var(--retro-link) !important; color: var(--retro-link) !important; background: var(--retro-subtle) !important; }
+.nav-button.active { border: 2px inset var(--retro-dark-border) !important; color: var(--retro-text) !important; background: #dfe5ec !important; box-shadow: none !important; text-decoration: none; }
+html[data-theme="night"] .nav-button.active { background: #45484d !important; }
+.nav-console { min-width: 96px !important; border: 2px outset var(--retro-dark-border) !important; color: var(--retro-accent) !important; }
+.nav-icon { font-size: 1rem !important; }
+
+.console-content:not(.home-console-surface) { background: var(--retro-surface) !important; }
+.panel-empty, .quest-layout, .homestead-section { border: 1px solid var(--retro-border) !important; background: var(--retro-panel) !important; box-shadow: none !important; }
+.quest-journal, .player-map-view, .homestead-view { background: var(--retro-surface) !important; }
+.view-heading, .quest-list-heading { border-color: var(--retro-border) !important; }
+.quest-entry { margin: 8px 0 14px !important; border: 1px solid var(--retro-border) !important; background: var(--retro-surface) !important; color: var(--retro-link) !important; text-decoration: underline; }
+.quest-entry.completed { color: var(--retro-green) !important; }
+.quest-objective { border-color: var(--retro-border) !important; color: var(--retro-text) !important; }
+
+.player-map-canvas-wrap { border: 1px solid var(--retro-border) !important; background: var(--retro-surface) !important; }
+.player-map-connection { stroke: var(--retro-dark-border) !important; stroke-width: 1.5 !important; }
+.player-map-connection.expedited { stroke: var(--retro-green) !important; stroke-dasharray: 4 3; }
+.player-map-connection.selected { stroke: var(--retro-link) !important; stroke-width: 2.5 !important; }
+.player-map-node rect { fill: var(--retro-surface) !important; stroke: var(--retro-dark-border) !important; stroke-width: 1 !important; }
+.player-map-node.discovered rect { stroke: var(--retro-dark-border) !important; }
+.player-map-node.current rect, .player-map-node.selected rect { stroke: var(--retro-link) !important; stroke-width: 2 !important; }
+.player-map-node text { fill: var(--retro-text) !important; font: 700 14px Verdana, sans-serif !important; }
+.player-map-node .player-node-type { fill: var(--retro-muted) !important; font: 11px Verdana, sans-serif !important; }
+.player-map-node .player-node-you { fill: var(--retro-accent) !important; }
+.player-token circle { fill: var(--retro-accent) !important; stroke: var(--retro-text) !important; stroke-width: 2 !important; }
+.player-map-inspector { border-color: var(--retro-border) !important; }
+.player-map-inspector button { border: 1px solid var(--retro-dark-border) !important; color: var(--retro-link) !important; background: var(--retro-surface) !important; text-decoration: underline; font-weight: normal !important; }
+.player-map-controls button { border: 1px solid var(--retro-border) !important; color: var(--retro-link) !important; background: var(--retro-surface) !important; }
+.travel-progress-readout { border: 1px solid var(--retro-border) !important; background: var(--retro-surface) !important; color: var(--retro-text) !important; }
+
+.homestead-view { color: var(--retro-text) !important; }
+.homestead-header, .homestead-condition, .homestead-inspector { border-color: var(--retro-border) !important; }
+.homestead-away { border: 1px solid var(--retro-accent) !important; background: var(--retro-accent-soft) !important; color: var(--retro-accent) !important; }
+.floorplan-stage { border: 1px solid var(--retro-border) !important; background: var(--retro-subtle) !important; }
+.management-floorplan { border: 1px solid var(--retro-border) !important; background: var(--retro-subtle) !important; background-image: none !important; }
+.floorplan-room { border: 3px solid var(--retro-dark-border) !important; background: var(--retro-surface) !important; }
+.floorplan-room-label { color: var(--retro-muted) !important; }
+.floorplan-door { border: 1px solid var(--retro-dark-border) !important; background: var(--retro-accent-soft) !important; }
+.floorplan-door.repaired { background: #b7d9bd !important; }
+.floorplan-door.selected { outline: 2px solid var(--retro-link) !important; }
+.structure-status { border-color: var(--retro-border) !important; color: var(--retro-accent) !important; }
+.structure-status.complete, .requirement-row strong.met { border-color: var(--retro-green) !important; color: var(--retro-green) !important; }
+.homestead-section { border-top: 1px solid var(--retro-border) !important; }
+.management-heading, .requirement-row, .storage-list div { border-color: var(--retro-border) !important; }
+.management-heading span { color: var(--retro-muted) !important; }
+.primary-button, .secondary-button { width: auto !important; padding: 7px 10px !important; border: 1px outset var(--retro-dark-border) !important; color: var(--retro-link) !important; background: var(--retro-surface) !important; font-weight: normal !important; text-transform: none !important; }
+.primary-button:hover:not(:disabled), .secondary-button:hover:not(:disabled) { border-color: var(--retro-link) !important; color: var(--retro-link) !important; background: var(--retro-subtle) !important; }
+
+.encounter-overlay { border: 1px solid var(--retro-accent) !important; background: var(--retro-surface) !important; box-shadow: 4px 4px 0 var(--retro-border) !important; }
+.encounter-overlay .action-button { border: 1px outset var(--retro-dark-border) !important; color: var(--retro-link) !important; background: var(--retro-surface) !important; }
+.health-track { border-color: var(--retro-border) !important; background: var(--retro-subtle) !important; }
+.health-track i { background: var(--retro-green) !important; }
+.health-track.enemy i { background: var(--retro-accent) !important; }
+
+.creation-console { background: var(--retro-surface) !important; color: var(--retro-text) !important; }
+.creation-heading h2 { color: var(--retro-text) !important; }
+.name-field { color: var(--retro-text) !important; letter-spacing: normal !important; text-transform: none !important; }
+.name-field input { border: 1px solid var(--retro-border) !important; background: var(--retro-surface) !important; color: var(--retro-text) !important; }
+.archetype-card { border: 1px solid var(--retro-border) !important; background: var(--retro-panel) !important; color: var(--retro-muted) !important; }
+.archetype-card strong { color: var(--retro-text) !important; }
+.archetype-card small, .archetype-status { color: var(--retro-accent) !important; letter-spacing: normal !important; text-transform: none !important; }
+.archetype-card:hover, .archetype-card.selected { border-color: var(--retro-link) !important; background: var(--retro-subtle) !important; color: var(--retro-text) !important; }
+.creation-footer { border-color: var(--retro-border) !important; }
+.journal-overlay { background: rgba(0, 0, 0, .2) !important; backdrop-filter: none !important; }
+
+/* Keep the development map editor practical and light in both themes. */
+.world-editor button, .world-editor select, .world-editor input, .world-editor textarea { border-radius: 0 !important; box-shadow: none !important; }
